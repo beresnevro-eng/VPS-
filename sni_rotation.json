@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "interval_days": 14,
+  "current_preset": "cloudflare",
+  "last_rotation": "2026-06-18T20:05:00"
+}

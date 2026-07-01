@@ -1,0 +1,35 @@
+# Секреты и runtime-состояние
+config.env
+mirrors/config.env
+clients_db.json
+vpn-profiles.txt
+tg_chat_id
+limited_users.json
+alert_state.json
+.last_update_id
+.autopilot.state
+
+# Ключи VPN (в git только *.example)
+xray-config.json
+mirrors/hysteria-config.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Логи и бэкапы
+*.log
+/backups/
+
+# IDE / локальное
+.cursor/
+!.cursor/rules/
+*.swp
+.DS_Store
+
+# Сгенерированные ссылки (содержат пароли/pin)
+hysteria2-link.txt
+vpn-links.txt

@@ -1,0 +1,21 @@
+listen: :8444
+
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
+
+auth:
+  type: password
+  password: CHANGE_ME
+
+masquerade:
+  type: proxy
+  proxy:
+    url: https://www.cloudflare.com
+    rewriteHost: true
+
+bandwidth:
+  up: 50 mbps
+  down: 200 mbps
+
+ignoreClientBandwidth: true

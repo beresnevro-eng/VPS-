@@ -1,0 +1,50 @@
+{
+  "server": {
+    "ip": "103.75.126.216",
+    "hostname": "287289.fornex.cloud",
+    "provider": "Fornex",
+    "timezone": "Europe/Berlin",
+    "updated": "2026-07-01"
+  },
+  "services": [
+    {
+      "name": "xray",
+      "unit": "xray.service",
+      "config": "/usr/local/etc/xray/config.json",
+      "ports": [443, 2053, 2096, 4433, 8443, 8448],
+      "protocol": "vless-reality"
+    },
+    {
+      "name": "hysteria-server",
+      "unit": "hysteria-server.service",
+      "config": "/etc/hysteria/config.yaml",
+      "ports": [8444],
+      "protocol": "hysteria2-udp"
+    },
+    {
+      "name": "xray-telegram-bot",
+      "unit": "xray-telegram-bot.service",
+      "entrypoint": "/root/daily-telegram-security/bot_poller.py",
+      "telegram": "@My_mini_server_bot",
+      "ports": [2097, 2098]
+    }
+  ],
+  "cron": [
+    {"file": "/etc/cron.d/vps-autopilot", "schedule": "*/15 * * * *", "script": "/root/vps-autopilot.sh"},
+    {"file": "/etc/cron.d/backup-server", "schedule": "0 3 * * *", "script": "/root/backup-server.sh"},
+    {"file": "/etc/cron.d/health-check", "schedule": "0 8 * * *", "script": "/root/health-check.sh"}
+  ],
+  "scripts": {
+    "autopilot": "/root/vps-autopilot.sh",
+    "backup": "/root/backup-server.sh",
+    "health_check": "/root/health-check.sh",
+    "restore_xray": "/root/restore-xray-config.sh",
+    "restart_bot": "/root/daily-telegram-security/restart-bot.sh"
+  },
+  "git": {
+    "remote": "https://github.com/beresnevro-eng/VPS-",
+    "path": "/root/daily-telegram-security"
+  },
+  "backup_dir": "/root/backups",
+  "backup_retention_days": 14
+}
