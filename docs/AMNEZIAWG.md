@@ -79,7 +79,10 @@ bash /root/awg-safe-stop.sh     # откат AWG без трогания Xray
 
 ## Handshake есть, интернета нет
 
-Симптом на iPhone: **Отправлено** много, **Получено** ~0 B.
+Симптом на iPhone: **Отправлено** много, **Получено** ~92 B.
+
+**Частая причина:** в клиенте `AllowedIPs = 0.0.0.0/0, ::/0` — iPhone гонит IPv6 в туннель, на сервере нет IPv6-NAT на `awg0`.  
+**Исправление:** только `AllowedIPs = 0.0.0.0/0`, перезапуск AmneziaVPN (disconnect → connect). Конфиги в `/root/amnesiawg-clients/` и `/awg` в боте уже без `::/0`.
 
 Сначала: `bash /root/awg-safe-start.sh` (безопасный PostUp).
 
