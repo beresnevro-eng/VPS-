@@ -1,0 +1,48 @@
+---
+description: Git — коммиты и версионность VPS-репозитория
+alwaysApply: true
+---
+
+# Git workflow (обязательно)
+
+Репозиторий: `beresnevro-eng/VPS-` · путь `/root/daily-telegram-security`
+
+## Когда коммитить
+
+- Завершена **логическая доработка** (фича, фикс, доки, скрипт)
+- Пользователь явно просит закоммитить
+- **Не** коммитить секреты, полуфабрикаты, «WIP» без запроса
+
+## Перед коммитом
+
+```bash
+cd /root/daily-telegram-security
+git status   # нет config.env, xray-config.json, clients_db.json, *.log
+```
+
+Если меняли `/root/vps-autopilot.sh` и др. — скопировать в `server-scripts/` перед `git add`.
+
+## Формат сообщений
+
+```
+<тип>: <кратко что и зачем>
+
+Типы: feat | fix | docs | chore | refactor
+```
+
+Примеры:
+- `feat: добавить команду /links hy2 в боте`
+- `fix: UnicodeDecodeError в get_hysteria2_link`
+- `docs: обновить RUNBOOK после смены cron`
+
+## После push
+
+```bash
+git push
+bash /root/vps-autopilot.sh
+systemctl restart xray-telegram-bot   # если менялся бот
+```
+
+## Ветки
+
+Пока только `main`. Крупные эксперименты — ветка `feature/имя`, merge в `main` после проверки.

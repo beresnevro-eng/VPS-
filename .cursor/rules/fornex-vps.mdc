@@ -1,0 +1,23 @@
+---
+description: Fornex VPN-бот и ops (читать docs перед изменениями)
+alwaysApply: true
+---
+
+# VPN-стек Fornex
+
+**Git:** https://github.com/beresnevro-eng/VPS- · рабочая копия `/root/daily-telegram-security`
+
+Сначала прочитай `docs/README.md` и `docs/GIT.md`.
+
+## Критично
+
+- Бот только через `systemctl restart xray-telegram-bot`, не `nohup`
+- Xray live: `/usr/local/etc/xray/config.json` · зеркало: `xray-config.json` (не в git)
+- Секреты только в `config.env` / `mirrors/config.env` — **никогда в коммит**
+
+## После изменений
+
+1. Синхронизировать `server-scripts/` если правили `/root/*.sh`
+2. Обновить `docs/` при смене поведения или команд
+3. **Git:** `git status` → коммит → `git push` (см. `docs/GIT.md`)
+4. На сервере: `bash /root/vps-autopilot.sh` и перезапуск затронутых сервисов

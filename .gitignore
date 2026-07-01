@@ -24,9 +24,10 @@ venv/
 *.log
 /backups/
 
-# IDE / локальное
-.cursor/
+# IDE / локальное (правила Cursor — в git)
+.cursor/*
 !.cursor/rules/
+!.cursor/rules/**
 *.swp
 .DS_Store
 
