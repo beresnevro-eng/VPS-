@@ -52,6 +52,7 @@ HELP_TEXT = """<b>Команды</b>
 <b>Ссылки</b>
 /links — все
 /links iphone / router / 2053 / hy2
+/awg iphone — конфиг AmneziaWG (.conf)
 
 <b>Клиенты (как в 3x-ui)</b>
 /users — все UUID на :443
@@ -115,6 +116,7 @@ def kb_main() -> dict:
         [_btn("📊 Сводка", "m:dash"), _btn("🩺 Проверка", "m:check")],
         [_btn("🔗 Ссылки", "m:links"), _btn("📷 QR iPhone", "q:iphone")],
         [_btn("🔌 Тест VPN", "m:test"), _btn("📬 Подписка", "m:sub")],
+        [_btn("🛡 AWG", "m:awg")],
         [_btn("👤 Клиенты", "m:users"), _btn("🔧 Вкл/Выкл", "m:manage")],
         [_btn("🎭 SNI", "m:sni"), _btn("📊 Активность", "m:clients")],
         [_btn("💾 Диск", "m:disk"), _btn("📦 Бэкап", "m:backup")],
@@ -337,12 +339,69 @@ def send_subscription(token: str, chat_id: int, cl) -> None:
         )
 
 
+def send_awg_config(token: str, chat_id: int, profile: str = "iphone") -> None:
+    """Отправить .conf AmneziaWG (если установлен)."""
+    import awg_manager as awg
+
+    key = (profile or "iphone").strip().lower()
+    if key in ("help", "?", ""):
+        send_message(token, chat_id, awg.format_awg_help(), reply_markup=kb_awg())
+        return
+    if key in ("status", "статус"):
+        send_message(token, chat_id, awg.format_awg_status(), parse_mode=None, reply_markup=kb_awg())
+        return
+    if key in ("all", "все", "list"):
+        names = awg.list_client_names()
+        if not names:
+            send_message(
+                token, chat_id,
+                awg.format_awg_help() + "\n\nУстановка на сервере:\n"
+                "<code>bash /root/setup-amnesiawg-lite.sh</code>",
+                reply_markup=kb_awg(),
+            )
+            return
+        for name in names:
+            path = awg.client_config_path(name)
+            if path:
+                send_document(
+                    token, chat_id, path,
+                    caption=f"🛡 AmneziaWG — {name}\nИмпорт в AmneziaVPN / AmneziaWG",
+                )
+        send_message(token, chat_id, f"Отправлено конфигов: {len(names)}", reply_markup=kb_awg())
+        return
+
+    path = awg.client_config_path(key)
+    if not path:
+        send_message(
+            token, chat_id,
+            f"Профиль <b>{html.escape(profile)}</b> не найден.\n\n{awg.format_awg_status()}",
+            reply_markup=kb_awg(),
+        )
+        return
+    try:
+        send_document(
+            token, chat_id, path,
+            caption=f"🛡 AmneziaWG — {path.stem}\nUDP :51830 · импорт .conf в AmneziaVPN",
+        )
+    except Exception as e:
+        send_message(token, chat_id, f"⚠️ Не удалось отправить файл: {e}", reply_markup=kb_awg())
+
+
 def kb_links() -> dict:
     return {"inline_keyboard": [
         [_btn("📱 iPhone", "l:iphone"), _btn("🌐 Роутер", "l:router")],
         [_btn("📲 Android", "l:android"), _btn("⚡ HY2", "l:hy2")],
+        [_btn("🛡 AWG", "m:awg")],
         [_btn("📡 :2053", "l:2053"), _btn("📡 :2096", "l:2096")],
         [_btn("📋 Все ссылки", "l:all")],
+        [_btn("◀️ Главное меню", "m:main")],
+    ]}
+
+
+def kb_awg() -> dict:
+    return {"inline_keyboard": [
+        [_btn("📱 iPhone", "a:iphone"), _btn("🌐 Роутер", "a:router")],
+        [_btn("💻 MacBook", "a:macbook"), _btn("📊 Статус", "a:status")],
         [_btn("◀️ Главное меню", "m:main")],
     ]}
 
@@ -682,6 +741,7 @@ def set_commands(token: str) -> None:
         {"command": "check", "description": "Диагностика сервера"},
         {"command": "vpn", "description": "Статус VPN"},
         {"command": "links", "description": "VLESS-ссылки"},
+        {"command": "awg", "description": "AmneziaWG конфиг (.conf)"},
         {"command": "qr", "description": "QR-код ссылки"},
         {"command": "test", "description": "Тест VPN-подключения"},
         {"command": "manage", "description": "Вкл/выкл клиентов"},
@@ -891,6 +951,9 @@ def handle_command(token: str, chat_id: int, text: str, role: str = "admin") -> 
     elif cmd == "/links":
         profile = " ".join(args).strip() if args else "all"
         send_links_copyable(token, chat_id, vpn, profile, reply_markup=kb_links())
+    elif cmd == "/awg":
+        profile = " ".join(args).strip() if args else "help"
+        send_awg_config(token, chat_id, profile)
     elif cmd == "/sni":
         if not args:
             send_message(token, chat_id, vpn.format_sni_info(), parse_mode=None, reply_markup=kb_sni())
@@ -978,6 +1041,8 @@ def handle_callback(token: str, chat_id: int, callback_id: str, data: str, role:
         send_message(token, chat_id, vpn.format_health_check(), parse_mode=None, reply_markup=kb_main())
     elif data == "m:links":
         send_message(token, chat_id, "Выберите профиль:", reply_markup=kb_links())
+    elif data == "m:awg":
+        send_message(token, chat_id, "🛡 AmneziaWG — выберите профиль:", reply_markup=kb_awg())
     elif data == "m:sni":
         send_message(token, chat_id, vpn.format_sni_info(), parse_mode=None, reply_markup=kb_sni())
     elif data == "m:clients":
@@ -1007,6 +1072,8 @@ def handle_callback(token: str, chat_id: int, callback_id: str, data: str, role:
     elif data.startswith("l:"):
         profile = data[2:]
         send_links_copyable(token, chat_id, vpn, profile, reply_markup=kb_links())
+    elif data.startswith("a:"):
+        send_awg_config(token, chat_id, data[2:])
     elif data == "s:show":
         send_message(token, chat_id, vpn.format_sni_info(), parse_mode=None, reply_markup=kb_sni())
     elif data.startswith("s:ask:"):

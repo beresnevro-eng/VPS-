@@ -22,6 +22,15 @@
       "protocol": "hysteria2-udp"
     },
     {
+      "name": "amneziawg",
+      "unit": "awg-quick@awg0.service",
+      "config": "/etc/amnezia/amneziawg/awg0.conf",
+      "ports": [51830],
+      "protocol": "amneziawg-udp",
+      "branch": "feature/amneziawg",
+      "status": "experimental"
+    },
+    {
       "name": "xray-telegram-bot",
       "unit": "xray-telegram-bot.service",
       "entrypoint": "/root/daily-telegram-security/bot_poller.py",
@@ -39,7 +48,8 @@
     "backup": "/root/backup-server.sh",
     "health_check": "/root/health-check.sh",
     "restore_xray": "/root/restore-xray-config.sh",
-    "restart_bot": "/root/daily-telegram-security/restart-bot.sh"
+    "restart_bot": "/root/daily-telegram-security/restart-bot.sh",
+    "setup_amneziawg": "/root/setup-amnesiawg-lite.sh"
   },
   "git": {
     "remote": "https://github.com/beresnevro-eng/VPS-",

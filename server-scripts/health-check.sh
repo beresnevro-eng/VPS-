@@ -34,6 +34,13 @@ check_service xray
 check_service xray-telegram-bot
 check_service hysteria-server
 
+if systemctl list-unit-files awg-quick@awg0.service &>/dev/null; then
+  check_service awg-quick@awg0
+elif [[ -f /etc/amnezia/amneziawg/awg0.conf ]]; then
+  ISSUES+=("AWG конфиг есть, но unit awg-quick@awg0 не найден")
+  echo "FAIL awg-quick@awg0 (unit)"
+fi
+
 check_file /usr/local/etc/xray/config.json "Xray config"
 check_file /root/daily-telegram-security/xray-config.json "Xray mirror"
 check_file /etc/hysteria/config.yaml "Hysteria config"

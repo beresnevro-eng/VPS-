@@ -541,6 +541,11 @@ def links_for_profile(profile: str, fp: str = "firefox") -> list[str]:
 def format_vpn_status() -> str:
     xray = service_active("xray")
     hy2 = service_active("hysteria-server") if _run(["systemctl", "list-unit-files", "hysteria-server.service"], timeout=8).returncode == 0 else "n/a"
+    try:
+        import awg_manager as awg
+        awg_line = f"AmneziaWG: {awg.awg_service_state()}"
+    except Exception:
+        awg_line = "AmneziaWG: n/a"
     disk = disk_usage()
     ib443 = main_443_inbound()
 
@@ -548,6 +553,7 @@ def format_vpn_status() -> str:
         "🖥 VPN / Xray",
         f"Xray: {xray}",
         f"Hysteria2: {hy2}",
+        awg_line,
     ]
     if disk.get("pct"):
         lines.append(f"Диск: {disk['used']} / {disk['size']} ({disk['pct']}, свободно {disk.get('avail', '?')})")
@@ -603,7 +609,7 @@ def format_vpn_status() -> str:
         lines.append(f"error.log: …{err_tail}")
 
     lines.append("")
-    lines.append("Команды: /links iphone · /sni · /logs · /disk")
+    lines.append("Команды: /links iphone · /awg · /sni · /logs · /disk")
     return "\n".join(lines)
 
 
