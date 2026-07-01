@@ -59,18 +59,29 @@ ss -ulnp | grep 51830
 
 ---
 
-## Handshake есть, интернета нет
+## Безопасный запуск (после инцидента с UFW)
 
-Симптом на iPhone: **Отправлено** много, **Получено** ~0 B, сайты не открываются.
+**НЕ использовать** `fix-awg-routing.sh` (удалён — ломал `before.rules`).
 
 ```bash
-bash /root/fix-awg-routing.sh
-awg show awg0
+bash /root/awg-safe-start.sh   # запуск + проверка Xray :443
+bash /root/awg-safe-stop.sh     # откат AWG без трогания Xray
 ```
 
-Частая причина: UFW `DEFAULT_FORWARD_POLICY=DROP` блокирует форвардинг с `awg0`.
+Скрипт:
+- бэкапит `before.rules` (на всякий случай)
+- **не редактирует** файлы UFW
+- только `ufw allow 51830/udp` (без reload)
+- NAT/forward через **PostUp** в `awg0.conf` (цепочка `ufw-before-forward`)
+- перед и после — проверка **Xray :443**
 
-После скрипта: **выключите VPN на iPhone → включите снова**.
+---
+
+## Handshake есть, интернета нет
+
+Симптом на iPhone: **Отправлено** много, **Получено** ~0 B.
+
+Сначала: `bash /root/awg-safe-start.sh` (безопасный PostUp).
 
 ---
 
