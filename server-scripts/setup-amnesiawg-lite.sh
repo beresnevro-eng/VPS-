@@ -109,7 +109,6 @@ generate_awg_params() {
   AWG_S4=$(rand_range 4 27)
   mapfile -t _h < <(generate_awg_h_ranges) || die "H1-H4 generation failed"
   AWG_H1="${_h[0]}"; AWG_H2="${_h[1]}"; AWG_H3="${_h[2]}"; AWG_H4="${_h[3]}"
-  AWG_I1=" "
   log "AWG params: Jc=$AWG_Jc Jmin=$AWG_Jmin Jmax=$AWG_Jmax S1=$AWG_S1 S2=$AWG_S2"
 }
 
@@ -181,7 +180,6 @@ H1 = ${AWG_H1}
 H2 = ${AWG_H2}
 H3 = ${AWG_H3}
 H4 = ${AWG_H4}
-I1 = ${AWG_I1}
 
 [Peer]
 PublicKey = ${server_pub}
@@ -239,7 +237,6 @@ H1 = ${AWG_H1}
 H2 = ${AWG_H2}
 H3 = ${AWG_H3}
 H4 = ${AWG_H4}
-I1 = ${AWG_I1}
 EOF
   chmod 600 "$SERVER_CONF"
 
