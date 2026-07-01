@@ -58,7 +58,8 @@ add_amnezia_ppa() {
 }
 
 rand_range() {
-  local min=$1 max=$2 range=$((max - min + 1)) v
+  local min=$1 max=$2 range v
+  range=$((max - min + 1))
   v=$(od -An -tu4 -N4 /dev/urandom 2>/dev/null | tr -d ' ')
   [[ -z "$v" || ! "$v" =~ ^[0-9]+$ ]] && v=$(( (RANDOM << 15) | RANDOM ))
   echo $(( (v % range) + min ))
