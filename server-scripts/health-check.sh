@@ -13,6 +13,7 @@ check_service() {
     xray) pgrep -f '/usr/local/bin/xray run' >/dev/null 2>&1 && { echo "OK  $name (process)"; return; } ;;
     hysteria-server) pgrep -f 'hysteria server' >/dev/null 2>&1 && { echo "OK  $name (process)"; return; } ;;
     xray-telegram-bot) pgrep -f 'bot_poller.py' >/dev/null 2>&1 && { echo "OK  $name (process)"; return; } ;;
+    awg-quick@*) ip link show awg0 &>/dev/null && awg show awg0 &>/dev/null && { echo "OK  $name (interface)"; return; } ;;
   esac
   ISSUES+=("$name не запущен")
   echo "FAIL $name"
@@ -33,6 +34,10 @@ echo "=== Health check $(date -Is) ==="
 check_service xray
 check_service xray-telegram-bot
 check_service hysteria-server
+
+if [[ -f /etc/amnezia/amneziawg/awg0.conf ]] || [[ -f /etc/wireguard/awg0.conf ]]; then
+  check_service awg-quick@awg0
+fi
 
 check_file /usr/local/etc/xray/config.json "Xray config"
 check_file /root/daily-telegram-security/xray-config.json "Xray mirror"
