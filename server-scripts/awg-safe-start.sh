@@ -50,9 +50,21 @@ sed -i '/^I1[[:space:]]*=/d' "$CONF" "$CLIENTS"/*.conf 2>/dev/null || true
 NIC=$(detect_nic)
 log "NIC: $NIC"
 
-# PostUp/PostDown: правила в ufw-before-forward (runtime), NAT — без правки файлов UFW
-POSTUP="iptables -I ufw-before-forward 1 -i awg0 -j ACCEPT; iptables -I ufw-before-forward 1 -o awg0 -j ACCEPT; iptables -t nat -C POSTROUTING -s 10.66.66.0/24 -o ${NIC} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s 10.66.66.0/24 -o ${NIC} -j MASQUERADE"
-POSTDOWN="iptables -D ufw-before-forward -i awg0 -j ACCEPT 2>/dev/null || true; iptables -D ufw-before-forward -o awg0 -j ACCEPT 2>/dev/null || true; iptables -t nat -D POSTROUTING -s 10.66.66.0/24 -o ${NIC} -j MASQUERADE 2>/dev/null || true"
+# PostUp как при первой успешной установке (%i = awg0) — проверено, стартует
+POSTUP="iptables -I FORWARD -i %i -j ACCEPT; iptables -t nat -C POSTROUTING -s 10.66.66.0/24 -o ${NIC} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s 10.66.66.0/24 -o ${NIC} -j MASQUERADE"
+POSTDOWN="iptables -D FORWARD -i %i -j ACCEPT 2>/dev/null || true; iptables -t nat -D POSTROUTING -s 10.66.66.0/24 -o ${NIC} -j MASQUERADE 2>/dev/null || true"
+
+apply_ufw_forward_if_present() {
+  if ! iptables -L ufw-before-forward -n &>/dev/null; then
+    log "ufw-before-forward нет — пропуск (PostUp FORWARD достаточно)"
+    return 0
+  fi
+  iptables -C ufw-before-forward -i awg0 -j ACCEPT 2>/dev/null \
+    || iptables -I ufw-before-forward 1 -i awg0 -j ACCEPT
+  iptables -C ufw-before-forward -o awg0 -j ACCEPT 2>/dev/null \
+    || iptables -I ufw-before-forward 1 -o awg0 -j ACCEPT
+  log "Доп. правила в ufw-before-forward (runtime, без правки файлов)"
+}
 
 # Обновить PostUp/PostDown в конфиге (идемпотентно через перезапись строк)
 python3 - <<PY
@@ -80,6 +92,8 @@ systemctl is-active --quiet awg-quick@awg0 || {
   journalctl -u awg-quick@awg0 -n 15 --no-pager | tee -a "$LOG"
   die "awg-quick@awg0 не запустился"
 }
+
+apply_ufw_forward_if_present
 
 awg show awg0 | tee -a "$LOG"
 ss -ulnp | grep ":${AWG_PORT}" | tee -a "$LOG" || die "UDP ${AWG_PORT} не слушает"
