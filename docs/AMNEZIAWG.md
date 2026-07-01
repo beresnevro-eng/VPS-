@@ -59,6 +59,21 @@ ss -ulnp | grep 51830
 
 ---
 
+## Handshake есть, интернета нет
+
+Симптом на iPhone: **Отправлено** много, **Получено** ~0 B, сайты не открываются.
+
+```bash
+bash /root/fix-awg-routing.sh
+awg show awg0
+```
+
+Частая причина: UFW `DEFAULT_FORWARD_POLICY=DROP` блокирует форвардинг с `awg0`.
+
+После скрипта: **выключите VPN на iPhone → включите снова**.
+
+---
+
 ## Откат (если AWG мешает)
 
 ```bash

@@ -151,12 +151,22 @@ EOF
 }
 
 setup_firewall() {
+  local nic
+  nic=$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}')
+  [[ -z "$nic" || "$nic" == "lo" ]] && nic=eth0
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q active; then
     ufw allow "${AWG_PORT}/udp" comment "AmneziaWG" || true
+    ufw route allow in on awg0 out on "$nic" 2>/dev/null || true
+    ufw route allow in on "$nic" out on awg0 2>/dev/null || true
     ufw reload || true
-    log "UFW: UDP ${AWG_PORT} открыт"
+    log "UFW: UDP ${AWG_PORT}, route awg0↔${nic}"
   else
     log "UFW неактивен — пропуск"
+  fi
+  if [[ -x /root/fix-awg-routing.sh ]]; then
+    bash /root/fix-awg-routing.sh >>"$LOG" 2>&1 || true
+  elif [[ -x "${BASH_SOURCE%/*}/fix-awg-routing.sh" ]]; then
+    bash "${BASH_SOURCE%/*}/fix-awg-routing.sh" >>"$LOG" 2>&1 || true
   fi
 }
 
