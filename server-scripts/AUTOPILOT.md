@@ -15,7 +15,7 @@
 - DNS (если не резолвит)
 - `config.json` Xray (из зеркала или бэкапа)
 - `config.env`, `hysteria/config.yaml`, код бота
-- Процессы: xray, hysteria, telegram-бот
+- Процессы: xray, hysteria, telegram-бот, fail2ban
 - Дубликаты бота
 - Диск >80%: journal, apt cache, большие логи
 
@@ -30,9 +30,11 @@
 ## Команды
 
 ```bash
+bash /root/setup-fail2ban.sh       # установка fail2ban (один раз)
 bash /root/vps-autopilot.sh      # ручной запуск
 bash /root/health-check.sh       # полная проверка
 tail -30 /var/log/vps-autopilot.log
+fail2ban-client status sshd      # забаненные IP
 ```
 
 ## Алерты в Telegram

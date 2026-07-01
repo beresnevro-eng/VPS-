@@ -199,6 +199,9 @@ main() {
   ensure_bot_code
   ensure_process '/usr/local/bin/xray run' xray 'Xray'
   ensure_process 'hysteria server' hysteria-server 'Hysteria2'
+  if dpkg -s fail2ban &>/dev/null; then
+    ensure_process 'fail2ban-server' fail2ban 'fail2ban'
+  fi
   ensure_process 'bot_poller.py' xray-telegram-bot 'Telegram-бот'
   normalize_bot_processes
   disk_maintenance

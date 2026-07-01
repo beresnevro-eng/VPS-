@@ -34,6 +34,9 @@ done
 mkdir -p "$TMP/cron.d"
 cp /etc/cron.d/vps-autopilot "$TMP/cron.d/" 2>/dev/null || true
 
+mkdir -p "$TMP/etc/fail2ban/jail.d"
+cp -a /etc/fail2ban/jail.d/fornex-sshd.local "$TMP/etc/fail2ban/jail.d/" 2>/dev/null || true
+
 cat >"$TMP/MANIFEST.txt" <<EOF
 backup_time=${STAMP}
 hostname=$(hostname -f 2>/dev/null || hostname)
