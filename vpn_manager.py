@@ -907,19 +907,25 @@ def format_health_check() -> str:
     lines = ["🩺 Проверка сервера", ""]
     xray = service_active("xray")
     ssh = service_active("ssh")
+    hy2 = service_active("hysteria-server")
     lines.append(f"Xray: {'✅' if xray == 'active' else '❌'} {xray}")
     lines.append(f"SSH:  {'✅' if ssh == 'active' else '❌'} {ssh}")
+    lines.append(f"Hysteria2: {'✅' if hy2 == 'active' else '❌'} {hy2}")
 
     ib443 = main_443_inbound()
     if ib443:
         lines.append(f"SNI :443 → {ib443['sni']}")
 
     try:
-        r = _run(["ss", "-tlnp"], timeout=8)
-        out = r.stdout or ""
-        for port in (443, 2053, 8443, 8444):
-            ok = f":{port} " in out
+        rtcp = _run(["ss", "-tlnp"], timeout=8)
+        rout = _run(["ss", "-ulnp"], timeout=8)
+        tcp_out = rtcp.stdout or ""
+        udp_out = rout.stdout or ""
+        for port in (443, 2053, 8443):
+            ok = f":{port} " in tcp_out
             lines.append(f"Порт {port}: {'✅ слушает' if ok else '❌ нет'}")
+        ok8444 = f":8444 " in udp_out or hy2 == "active"
+        lines.append(f"Порт 8444 (UDP/HY2): {'✅ слушает' if ok8444 else '❌ нет'}")
     except Exception:
         lines.append("Порты: не удалось проверить")
 
