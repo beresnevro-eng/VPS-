@@ -645,7 +645,7 @@ def get_hysteria2_link() -> str | None:
 def _load_sni_state() -> dict:
     if not SNI_STATE.is_file():
         return {
-            "enabled": True,
+            "enabled": False,
             "interval_days": SNI_ROTATION_DAYS,
             "current_preset": DEFAULT_SNI_PRESET,
             "last_rotation": None,
@@ -654,7 +654,7 @@ def _load_sni_state() -> dict:
         data = json.loads(SNI_STATE.read_text())
     except Exception:
         data = {}
-    data.setdefault("enabled", True)
+    data.setdefault("enabled", False)
     data.setdefault("interval_days", SNI_ROTATION_DAYS)
     data.setdefault("current_preset", DEFAULT_SNI_PRESET)
     return data
@@ -693,8 +693,10 @@ def format_sni_rotation_info() -> str:
 
 def poll_sni_rotation() -> list[str]:
     """Плановая смена SNI. Возвращает сообщения для Telegram."""
+    # Авто-ротация отключена (sni_rotation.json enabled=false + закомментирован вызов в bot_poller).
+    # Для восстановления: enabled=true, раскомментировать блок в bot_poller.py main loop.
     state = _load_sni_state()
-    if not state.get("enabled", True):
+    if not state.get("enabled", False):
         return []
 
     days = int(state.get("interval_days", SNI_ROTATION_DAYS))

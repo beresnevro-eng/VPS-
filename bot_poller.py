@@ -74,7 +74,7 @@ HELP_TEXT = """<b>Команды</b>
 /disk / /logs
 
 <b>Алерты</b> — бот сам пишет, если Xray упал или диск &gt;80%
-<b>SNI</b> — авто-смена каждые 14 дн. + уведомление (/sni)
+<b>SNI</b> — смена вручную: /sni (авто-ротация выключена)
 
 <b>V2RayTun</b>
 /sub — подписка (443, 2053, 2096… + HY2)
@@ -1126,18 +1126,19 @@ def main() -> None:
             except Exception as ae:
                 print(f"[!] poll_alerts: {ae}", flush=True)
 
-        if now - last_sni_check >= 86400:
-            last_sni_check = now
-            try:
-                vpn = vpn_mod()
-                for alert_msg in vpn.poll_sni_rotation():
-                    for cid in allow:
-                        try:
-                            send_message(token, cid, alert_msg)
-                        except Exception as se:
-                            print(f"[!] sni rotation send: {se}", flush=True)
-            except Exception as se:
-                print(f"[!] poll_sni_rotation: {se}", flush=True)
+        # --- Авто-ротация SNI (отключена; восстановить: раскомментировать + enabled:true в sni_rotation.json)
+        # if now - last_sni_check >= 86400:
+        #     last_sni_check = now
+        #     try:
+        #         vpn = vpn_mod()
+        #         for alert_msg in vpn.poll_sni_rotation():
+        #             for cid in allow:
+        #                 try:
+        #                     send_message(token, cid, alert_msg)
+        #                 except Exception as se:
+        #                     print(f"[!] sni rotation send: {se}", flush=True)
+        #     except Exception as se:
+        #         print(f"[!] poll_sni_rotation: {se}", flush=True)
 
         try:
             url = base + "/getUpdates?" + urllib.parse.urlencode({"timeout": 55, "offset": offset + 1})
