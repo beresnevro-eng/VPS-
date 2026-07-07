@@ -1,6 +1,7 @@
 {
-  "enabled": true,
+  "_comment": "enabled=false отключает авто-ротацию; вернуть true для восстановления",
+  "enabled": false,
   "interval_days": 14,
   "current_preset": "cloudflare",
-  "last_rotation": "2026-06-18T20:05:00"
+  "last_rotation": "2026-07-03T12:23:46"
 }
