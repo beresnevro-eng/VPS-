@@ -177,8 +177,19 @@ disk_maintenance() {
   pct=$(df / --output=pcent | tail -1 | tr -dc '0-9')
   [[ "$pct" -ge 80 ]] || return 0
   apt-get clean -y 2>/dev/null || true
-  journalctl --vacuum-time=14d 2>/dev/null || true
+  # Лимит по размеру важнее time: иначе journal снова быстро раздувает диск
+  journalctl --vacuum-size=150M 2>/dev/null || true
+  journalctl --vacuum-time=7d 2>/dev/null || true
   find /var/log/xray -name 'access.log' -size +50M -exec truncate -s 0 {} \; 2>/dev/null || true
+  # Старые failed-login / syslog после ротации
+  find /var/log -maxdepth 1 -name 'btmp.*' -mtime +7 -delete 2>/dev/null || true
+  if [[ -f /var/log/syslog ]]; then
+    local ssz
+    ssz=$(stat -c%s /var/log/syslog 2>/dev/null || echo 0)
+    if [[ "$ssz" -gt 52428800 ]]; then
+      truncate -s 0 /var/log/syslog 2>/dev/null || true
+    fi
+  fi
   if [[ -f /root/bot_poller.log ]]; then
     local sz
     sz=$(stat -c%s /root/bot_poller.log 2>/dev/null || echo 0)
@@ -187,7 +198,8 @@ disk_maintenance() {
       mv /root/bot_poller.log.tmp /root/bot_poller.log
     fi
   fi
-  mark_fix "очистка диска (было ${pct}%)"
+  # Стабильный текст алерта (без %), чтобы cooldown 6ч не сбрасывался
+  mark_fix "очистка диска (порог >=80%)"
 }
 
 main() {
