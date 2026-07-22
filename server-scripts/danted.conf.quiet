@@ -1,8 +1,9 @@
-# Dante SOCKS — минимум логов (сканеры не должны раздувать syslog)
-# Оригинал: /etc/danted.conf — бэкап перед заменой обязателен
+# Dante SOCKS — логи отключены (сканеры иначе раздувают syslog/journal)
+# Оригинал бэкапится на сервере как /etc/danted.conf.bak.*
 # Порт и auth не меняем: 0.0.0.0:1080, socksmethod username
+# Вернуть логи: logoutput: syslog и log: error в правилах
 
-logoutput: syslog
+logoutput: /dev/null
 
 internal: 0.0.0.0 port = 1080
 external: eth0
@@ -14,11 +15,9 @@ user.notprivileged: nobody
 
 client pass {
   from: 0.0.0.0/0 to: 0.0.0.0/0
-  log: error
 }
 
 socks pass {
   from: 0.0.0.0/0 to: 0.0.0.0/0
   protocol: tcp udp
-  log: error
 }
