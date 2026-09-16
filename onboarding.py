@@ -37,10 +37,36 @@ DIGEST_FOLLOWUP_QUESTION = "Что из этого отозвалось силь
 CB_DIGEST_SKIP = "digest:skip"
 
 
-# Mini App (GitHub Pages).
-# Важно: явный index.html — без редиректа /VPS- → /VPS-/, иначе Telegram macOS
-# теряет #tgWebAppData=... и initData остаётся пустым.
-MINI_APP_URL = "https://beresnevro-eng.github.io/VPS-/index.html"
+# Mini App URL: Cloudflare Tunnel (без редиректа GitHub Pages — иначе initData пустой).
+# HOST_FIX_MINIAPP.sh пишет актуальный URL в .env; читаем при каждом открытии кнопки.
+import os
+
+_DEFAULT_MINI_APP = "https://beresnevro-eng.github.io/VPS-/index.html"
+
+
+def get_mini_app_url() -> str:
+    env_url = (os.getenv("MINI_APP_URL") or "").strip()
+    if env_url:
+        return env_url
+    try:
+        from dotenv import dotenv_values
+
+        vals = dotenv_values(os.path.join(os.path.dirname(__file__), ".env"))
+        file_url = (vals.get("MINI_APP_URL") or "").strip()
+        if file_url:
+            return file_url
+    except Exception:
+        pass
+    return _DEFAULT_MINI_APP
+
+
+# совместимость со старым кодом
+MINI_APP_URL = get_mini_app_url()
+
+
+def mini_app_web_info() -> WebAppInfo:
+    return WebAppInfo(url=get_mini_app_url())
+
 
 # Тексты постоянной клавиатуры (ReplyKeyboard) — всегда под рукой
 BTN_SHEPOT = "🌿 Открыть Шёпот"
@@ -53,10 +79,6 @@ BTN_MENU = "🏠 Меню"
 
 # WebApp-кнопка не шлёт текст в чат — в MENU_BUTTON_TEXTS её нет
 MENU_BUTTON_TEXTS = {BTN_QUIZ, BTN_STATUS, BTN_PROFILE, BTN_DIGEST, BTN_HELP, BTN_MENU}
-
-
-def mini_app_web_info() -> WebAppInfo:
-    return WebAppInfo(url=MINI_APP_URL)
 
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:

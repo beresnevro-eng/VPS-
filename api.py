@@ -13,8 +13,12 @@ from datetime import datetime
 from typing import Any, Optional
 from urllib.parse import parse_qsl
 
+import os
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -35,6 +39,8 @@ from database import (
 
 logger = logging.getLogger(__name__)
 
+DOCS_DIR = Path(__file__).resolve().parent / "docs"
+
 app = FastAPI(
     title=f"{config.PROJECT_NAME} Mini App API",
     version="0.1.0",
@@ -44,11 +50,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
+    allow_origins=list(getattr(config, "API_CORS_ORIGINS", None) or [
         "https://beresnevro-eng.github.io",
         "https://beresnevro-eng.github.io/VPS-",
-    ],
-    allow_origin_regex=r"https://.*\.github\.io",
+    ]),
+    allow_origin_regex=r"https://.*\.(github\.io|trycloudflare\.com)",
     allow_credentials=False,  # cookies не нужны; так совместимее с WebView
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
@@ -534,3 +540,24 @@ async def api_topics_block(
         "blocked": body.blocked,
         "couple_blocked": blocked,
     }
+
+
+# --- Mini App UI (тот же хост, что API — без редиректа GitHub Pages) ---
+
+
+@app.get("/app")
+@app.get("/app/")
+@app.get("/app/index.html")
+async def mini_app_shell() -> FileResponse:
+    return FileResponse(DOCS_DIR / "index.html", media_type="text/html; charset=utf-8")
+
+
+@app.get("/app/{asset_path:path}")
+async def mini_app_asset(asset_path: str) -> FileResponse:
+    """Отдаём css/js рядом с index без mount (чтобы /app/index.html не перехватывался)."""
+    safe = Path(asset_path).name
+    target = DOCS_DIR / safe
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    media = "text/css" if safe.endswith(".css") else "application/javascript" if safe.endswith(".js") else None
+    return FileResponse(target, media_type=media)

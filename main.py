@@ -70,6 +70,21 @@ async def run_api() -> None:
 
 async def run_bot(bot: Bot, dp: Dispatcher, scheduler) -> None:
     try:
+        # Menu Button слева от поля ввода + дубль на клавиатуре
+        try:
+            from aiogram.types import MenuButtonWebApp
+            import onboarding as ob
+
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Шёпот",
+                    web_app=ob.mini_app_web_info(),
+                )
+            )
+            logging.info("Menu Button → %s", ob.get_mini_app_url())
+        except Exception:
+            logging.exception("Не удалось выставить Menu Button")
+
         # handle_signals=False — иначе конфликт с uvicorn в одном процессе
         await dp.start_polling(
             bot,

@@ -1,5 +1,6 @@
 #!/bin/bash
 # Безопасный фикс Mini App. НЕ трогает порт 8080 (там Xray — ваш VPN/SSH).
+# Mini App отдаётся с того же tunnel, что и API — без редиректа GitHub Pages.
 set -euo pipefail
 cd /root/couple-quiz-bot
 
@@ -68,39 +69,85 @@ fi
 echo "TUNNEL=$TUNNEL"
 echo "$TUNNEL" >/tmp/shepot_tunnel_url.txt
 
+MINI_URL="${TUNNEL}/app/index.html"
+if grep -q '^MINI_APP_URL=' .env; then
+  sed -i "s|^MINI_APP_URL=.*|MINI_APP_URL=${MINI_URL}|" .env
+else
+  echo "MINI_APP_URL=${MINI_URL}" >> .env
+fi
+echo "MINI_APP_URL=$MINI_URL"
+
 python3 - <<'PY'
 from pathlib import Path
 import re
 tunnel = open("/tmp/shepot_tunnel_url.txt").read().strip()
 p = Path("/root/couple-quiz-bot/docs/app.js")
 text = p.read_text()
-text2, n = re.subn(r"https://[a-z0-9.-]+\.trycloudflare\.com", tunnel, text, count=1)
+# fallback URL внутри else-ветки (не trycloudflare origin)
+text2, n = re.subn(
+    r'(window\.SHEPOT_API_BASE\s*=\s*\n?\s*window\.SHEPOT_API_BASE\s*\|\|\s*")https://[a-z0-9.-]+\.trycloudflare\.com(")',
+    rf"\1{tunnel}\2",
+    text,
+    count=1,
+)
 if n == 0:
-    # fallback: replace placeholder assignment value
     text2, n = re.subn(
-        r'(window\.SHEPOT_API_BASE\s*=\s*\n?\s*window\.SHEPOT_API_BASE\s*\|\|\s*")[^"]+(")',
-        rf"\1{tunnel}\2",
+        r'https://[a-z0-9.-]+\.trycloudflare\.com',
+        tunnel,
         text,
         count=1,
     )
 if n == 0:
-    raise SystemExit("patch failed")
+    raise SystemExit("patch app.js failed")
 p.write_text(text2)
-print("patched app.js ->", tunnel)
+print("patched app.js fallback ->", tunnel)
 PY
 
-echo "=== 4) checks ==="
-curl -sS -m 15 --http1.1 "${TUNNEL}/api/health"; echo
-curl -sS -m 15 --http1.1 -D- -o /dev/null -H "Origin: https://beresnevro-eng.github.io" \
-  "${TUNNEL}/api/health" | tr -d '\r' | grep -iE 'HTTP/|access-control|content-type' || true
+echo "=== 4) update Telegram Menu Button + local checks ==="
+.venv/bin/python - <<'PY'
+import asyncio
+import os
+from pathlib import Path
 
-echo "=== 5) git push gh-pages ==="
+from dotenv import load_dotenv
+from aiogram import Bot
+from aiogram.types import MenuButtonWebApp, WebAppInfo
+
+load_dotenv(Path("/root/couple-quiz-bot/.env"), override=True)
+url = os.environ["MINI_APP_URL"]
+token = os.environ["BOT_TOKEN"]
+
+async def main():
+    bot = Bot(token=token)
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(text="Шёпот", web_app=WebAppInfo(url=url))
+    )
+    print("Menu Button set ->", url)
+    await bot.session.close()
+
+asyncio.run(main())
+PY
+
+curl -sS -m 3 --noproxy '*' --http1.1 "http://127.0.0.1:${API_PORT}/app/index.html" | head -c 120; echo
+curl -sS -m 3 --noproxy '*' --http1.1 "http://127.0.0.1:${API_PORT}/api/health"; echo
+
+echo "=== 5) checks tunnel ==="
+if curl -sS -m 15 --http1.1 "${TUNNEL}/api/health"; then
+  echo
+  curl -sS -m 15 --http1.1 "${TUNNEL}/app/index.html" | head -c 80; echo
+else
+  echo
+  echo "WARN: curl к туннелю с VPS не прошёл (часто DNS). Проверьте с телефона/Mini App."
+  grep -E 'Registered tunnel connection|ERR' /tmp/cloudflared.log | tail -5 || true
+fi
+
+echo "=== 6) git push (код + gh-pages fallback) ==="
 cd /root/couple-quiz-bot
 export GIT_SSH_COMMAND="ssh -F /dev/null -i /root/.ssh/id_ed25519_github -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 export GIT_AUTHOR_NAME=beresnevro-eng GIT_AUTHOR_EMAIL=beresnevro-eng@users.noreply.github.com
 export GIT_COMMITTER_NAME=$GIT_AUTHOR_NAME GIT_COMMITTER_EMAIL=$GIT_AUTHOR_EMAIL
-git add docs/ api.py main.py start.sh HOST_FIX_MINIAPP.sh
-git commit -m "Mini App: API на :8787 (не трогаем Xray :8080)" || echo "no commit"
+git add docs/ api.py main.py onboarding.py start.sh HOST_FIX_MINIAPP.sh
+git commit -m "fix: Mini App на Cloudflare tunnel (сохраняем initData)" || echo "no commit"
 git push origin HEAD:couple-quiz-bot || true
 
 rm -rf /tmp/shepot-gh-pages && mkdir -p /tmp/shepot-gh-pages
@@ -109,13 +156,15 @@ cd /tmp/shepot-gh-pages
 git init -b gh-pages >/dev/null
 git add .
 git -c user.name=beresnevro-eng -c user.email=beresnevro-eng@users.noreply.github.com \
-  commit -m "Mini App: API tunnel update" >/dev/null
+  commit -m "Mini App: tunnel-first + API fallback" >/dev/null
 git remote add origin git@github.com:beresnevro-eng/VPS-.git
-git push -f origin gh-pages
+git push -f origin gh-pages || true
 
 echo
 echo "READY — SSH/VPN не должны обрываться"
-echo "Mini App: https://beresnevro-eng.github.io/VPS-/"
+echo "Mini App (открывать из бота): $MINI_URL"
 echo "API tunnel: $TUNNEL"
 echo "Local API:  http://127.0.0.1:${API_PORT}/api/health"
 echo "Xray :8080 не трогали"
+echo
+echo "В Telegram: /menu → снова «🌿 Открыть Шёпот»"

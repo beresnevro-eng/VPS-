@@ -1,10 +1,18 @@
 /**
  * Mini App «Шёпот» — пульт пары.
- * API через Cloudflare Tunnel (обновляется HOST_FIX_MINIAPP.sh).
+ * Если открыто с Cloudflare Tunnel — API на том же origin (initData не теряется).
+ * Иначе — явный tunnel URL (обновляется HOST_FIX_MINIAPP.sh) / GitHub Pages fallback.
  */
-window.SHEPOT_API_BASE =
-  window.SHEPOT_API_BASE || "https://foster-develop-vhs-advert.trycloudflare.com";
-const API_BASE = String(window.SHEPOT_API_BASE).replace(/\/$/, "");
+(function () {
+  const host = String(location.hostname || "");
+  if (/\.trycloudflare\.com$/i.test(host)) {
+    window.SHEPOT_API_BASE = window.SHEPOT_API_BASE || location.origin;
+  } else {
+    window.SHEPOT_API_BASE =
+      window.SHEPOT_API_BASE || "https://foster-develop-vhs-advert.trycloudflare.com";
+  }
+})();
+const API_BASE = String(window.SHEPOT_API_BASE || "").replace(/\/$/, "");
 const BOT_URL = "https://t.me/Familia_Quiz_bot";
 
 const $ = (id) => document.getElementById(id);
