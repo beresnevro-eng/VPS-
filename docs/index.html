@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Шёпот — Люм</title>
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=20260916c" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script>
     try { window.Telegram?.WebApp?.ready(); } catch (e) {}
@@ -14,8 +14,10 @@
   <div id="app" class="app">
     <header class="topbar">
       <p class="brand">Шёпот</p>
-      <p class="pair-chip" id="pair-chip">…</p>
+      <p class="pair-chip" id="pair-chip" hidden></p>
     </header>
+
+    <p id="diag" class="diag" hidden></p>
 
     <div id="pull-indicator" class="pull-indicator" hidden>Обновляю…</div>
     <div id="toast" class="toast" hidden></div>
@@ -148,6 +150,6 @@
       </button>
     </nav>
   </div>
-  <script src="./app.js?v=20260916b"></script>
+  <script src="./app.js?v=20260916c"></script>
 </body>
 </html>

@@ -202,29 +202,31 @@ async def api_history(
     async with get_session() as session:
         quizzes = (
             await session.execute(
-                select(Quiz)
-                .where(Quiz.status.in_(("analyzed", "closed", "exchanging", "analysis_pending")))
-                .order_by(Quiz.id.desc())
-                .limit(limit)
+                select(Quiz).order_by(Quiz.id.desc()).limit(limit)
             )
         ).scalars().all()
 
         items: list[dict[str, Any]] = []
         for quiz in quizzes:
+            questions: list[Any] = []
             try:
                 payload = await load_quiz_for_analysis(session, quiz.id)
+                questions = payload.get("questions") or []
             except Exception:
                 logger.exception("history quiz %s", quiz.id)
-                continue
             items.append(
                 {
                     "quiz_id": quiz.id,
                     "date": (quiz.created_at or datetime.utcnow()).isoformat() + "Z",
                     "topic": quiz.topic,
                     "topic_code": quiz.topic_code or "",
+                    "topic_label": config.mood_label(quiz.topic_code)
+                    if quiz.topic_code
+                    else (quiz.topic or ""),
                     "status": quiz.status,
                     "analysis": quiz.analysis_text or "",
-                    "questions": payload.get("questions") or [],
+                    "questions": questions,
+                    "discuss_url": f"https://t.me/Familia_Quiz_bot?start=discuss_{quiz.id}",
                 }
             )
 

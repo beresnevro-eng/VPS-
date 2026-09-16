@@ -59,6 +59,19 @@ body { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 12px); }
   border: 1px solid color-mix(in srgb, var(--accent-2) 30%, transparent);
   border-radius: 999px;
   padding: 4px 10px;
+  pointer-events: none;
+}
+
+.diag {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--muted);
+  background: color-mix(in srgb, #000 35%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--waiting) 45%, transparent);
+  word-break: break-all;
 }
 
 .hero { margin-bottom: 16px; }

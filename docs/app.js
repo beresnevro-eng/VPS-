@@ -176,6 +176,14 @@ function renderHistory(quizzes) {
   }
 }
 
+function setDiag(lines) {
+  const el = $("diag");
+  if (!el) return;
+  const text = (Array.isArray(lines) ? lines : [lines]).filter(Boolean).join("\n");
+  el.hidden = !text;
+  el.textContent = text;
+}
+
 function showBootError(title, text) {
   $("greeting").textContent = title;
   $("home-sub").textContent = "Люм рядом";
@@ -189,6 +197,7 @@ function showBootError(title, text) {
   $("cta-waiting").hidden = true;
   $("history-empty").hidden = false;
   $("home-empty").hidden = true;
+  $("pair-chip").hidden = true;
 }
 
 async function waitForInitData(timeoutMs = 5000) {
@@ -202,7 +211,8 @@ async function waitForInitData(timeoutMs = 5000) {
       } catch (_) {
         /* ignore */
       }
-      if (w.initData && w.initData.length > 20) return w.initData;
+      // initData бывает коротким только в тестах; реальный — длинный
+      if (w.initData && String(w.initData).length > 8) return w.initData;
     }
     await new Promise((r) => setTimeout(r, 80));
   }
@@ -227,6 +237,11 @@ async function bootSession() {
   const sk = document.querySelector("#home-status-card [data-sk]");
   if (sk) sk.hidden = false;
   $("home-status").hidden = true;
+  setDiag([
+    `API: ${API_BASE}`,
+    `Telegram SDK: ${getTg() ? "да" : "нет"}`,
+    `platform: ${getTg()?.platform || "—"}`,
+  ]);
 
   if (!getTg()) {
     showBootError(
@@ -238,30 +253,53 @@ async function bootSession() {
 
   const initData = await waitForInitData(5000);
   state.initData = initData;
+  setDiag([
+    `API: ${API_BASE}`,
+    `initData: ${initData ? initData.length + " символов" : "ПУСТО"}`,
+    `user: ${getTg()?.initDataUnsafe?.user?.id || "—"}`,
+    `platform: ${getTg()?.platform || "—"}`,
+  ]);
+
   if (!initData) {
-    const unsafe = getTg()?.initDataUnsafe;
-    console.warn("[Shepot] empty initData", {
-      platform: getTg()?.platform,
-      version: getTg()?.version,
-      unsafeUser: unsafe?.user?.id,
-    });
+    console.warn("[Shepot] empty initData", getTg()?.initDataUnsafe);
     showBootError(
       "Сессия не получена",
-      "Закройте Mini App и снова нажмите «🌿 Открыть Шёпот» в боте (не через браузер)."
+      "Закройте Mini App полностью и снова нажмите «🌿 Открыть Шёпот» в боте."
     );
     return;
   }
 
   try {
+    // быстрый ping API до auth
+    const health = await fetch(`${API_BASE}/api/health`, { method: "GET" }).then((r) =>
+      r.json()
+    ).catch((e) => ({ error: String(e.message || e) }));
+    setDiag([
+      `API: ${API_BASE}`,
+      `health: ${health.status || health.error || JSON.stringify(health)}`,
+      `initData: ${initData.length} символов`,
+      `user: ${getTg()?.initDataUnsafe?.user?.id || "—"}`,
+    ]);
+
     state.auth = await apiFetch("/api/auth", {
       method: "POST",
       body: { initData },
     });
     await refreshAll();
     $("cta-retry").hidden = true;
+    // после успеха diag можно свернуть
+    setDiag([
+      `Загружено квизов: ${state.history.length}`,
+      `CTA: ${state.active?.cta || "—"}`,
+    ]);
   } catch (err) {
     console.error("[Shepot]", err);
     showBootError("Не удалось загрузить данные", String(err.message || err));
+    setDiag([
+      `API: ${API_BASE}`,
+      `ошибка: ${String(err.message || err)}`,
+      `initData: ${initData.length} символов`,
+    ]);
   }
 }
 
@@ -435,7 +473,9 @@ async function refreshAll() {
 
     const you = profile.name || state.auth?.name || "Вы";
     const partner = profile.partner_name || profile.partner?.name || "";
-    $("pair-chip").textContent = partner ? `${you} × ${partner}` : you;
+    const chip = $("pair-chip");
+    chip.hidden = false;
+    chip.textContent = partner ? `${you} × ${partner}` : you;
     $("greeting").textContent = `Привет, ${you}!`;
     $("home-sub").textContent = `${state.auth?.assistant || "Люм"} рядом`;
 
@@ -444,6 +484,7 @@ async function refreshAll() {
     renderHistory(state.history);
     renderPortrait();
     await loadMoods();
+    setDiag([`Квизов в истории: ${state.history.length}`, `Статус: ${active?.status_text || "—"}`]);
   } finally {
     $("pull-indicator").hidden = true;
   }
