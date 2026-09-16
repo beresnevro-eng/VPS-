@@ -200,6 +200,32 @@ function showBootError(title, text) {
   $("pair-chip").hidden = true;
 }
 
+function extractInitData() {
+  const fromTg = getTg()?.initData;
+  if (fromTg && String(fromTg).length > 8) return fromTg;
+
+  // Hash, который Telegram кладёт при открытии WebApp
+  try {
+    const hash = window.location.hash || sessionStorage.getItem("shepot_launch_hash") || "";
+    if (hash.includes("tgWebAppData=")) {
+      const params = new URLSearchParams(hash.replace(/^#/, ""));
+      const raw = params.get("tgWebAppData");
+      if (raw && raw.length > 8) return raw;
+    }
+  } catch (_) {
+    /* ignore */
+  }
+
+  try {
+    const saved = sessionStorage.getItem("shepot_tgWebAppData");
+    if (saved && saved.length > 8) return saved;
+  } catch (_) {
+    /* ignore */
+  }
+
+  return "";
+}
+
 async function waitForInitData(timeoutMs = 5000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -211,12 +237,12 @@ async function waitForInitData(timeoutMs = 5000) {
       } catch (_) {
         /* ignore */
       }
-      // initData бывает коротким только в тестах; реальный — длинный
-      if (w.initData && String(w.initData).length > 8) return w.initData;
     }
+    const data = extractInitData();
+    if (data) return data;
     await new Promise((r) => setTimeout(r, 80));
   }
-  return getTg()?.initData || "";
+  return extractInitData();
 }
 
 async function bootSession() {

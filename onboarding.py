@@ -13,6 +13,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
+    WebAppInfo,
 )
 
 
@@ -36,7 +37,13 @@ DIGEST_FOLLOWUP_QUESTION = "Что из этого отозвалось силь
 CB_DIGEST_SKIP = "digest:skip"
 
 
+# Mini App (GitHub Pages).
+# Важно: явный index.html — без редиректа /VPS- → /VPS-/, иначе Telegram macOS
+# теряет #tgWebAppData=... и initData остаётся пустым.
+MINI_APP_URL = "https://beresnevro-eng.github.io/VPS-/index.html"
+
 # Тексты постоянной клавиатуры (ReplyKeyboard) — всегда под рукой
+BTN_SHEPOT = "🌿 Открыть Шёпот"
 BTN_QUIZ = "💌 Квиз"
 BTN_STATUS = "📊 Статус"
 BTN_PROFILE = "👤 Мой профиль"
@@ -44,13 +51,19 @@ BTN_DIGEST = "📊 Итоги недели"
 BTN_HELP = "❓ Помощь"
 BTN_MENU = "🏠 Меню"
 
+# WebApp-кнопка не шлёт текст в чат — в MENU_BUTTON_TEXTS её нет
 MENU_BUTTON_TEXTS = {BTN_QUIZ, BTN_STATUS, BTN_PROFILE, BTN_DIGEST, BTN_HELP, BTN_MENU}
 
 
+def mini_app_web_info() -> WebAppInfo:
+    return WebAppInfo(url=MINI_APP_URL)
+
+
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
-    """Постоянные кнопки управления ботом."""
+    """Постоянные кнопки: Mini App сверху, дальше движок бота."""
     return ReplyKeyboardMarkup(
         keyboard=[
+            [KeyboardButton(text=BTN_SHEPOT, web_app=mini_app_web_info())],
             [KeyboardButton(text=BTN_QUIZ), KeyboardButton(text=BTN_STATUS)],
             [KeyboardButton(text=BTN_PROFILE), KeyboardButton(text=BTN_DIGEST)],
             [KeyboardButton(text=BTN_HELP)],
