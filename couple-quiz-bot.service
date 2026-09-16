@@ -1,0 +1,17 @@
+[Unit]
+Description=Couple Quiz Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/couple-quiz-bot
+EnvironmentFile=/root/couple-quiz-bot/.env
+ExecStart=/root/couple-quiz-bot/.venv/bin/python /root/couple-quiz-bot/main.py
+Restart=always
+RestartSec=5
+# Лёгкий VPS: ограничим память, чтобы не убить систему
+MemoryMax=350M
+
+[Install]
+WantedBy=multi-user.target

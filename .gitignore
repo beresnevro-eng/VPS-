@@ -1,0 +1,28 @@
+# Secrets & local runtime
+.env
+.env.*
+!.env.example
+data/
+*.db
+*.sqlite
+bot.log
+*.log
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+.agent_write_test
+*.bak
+*.bak-*
+
+# Local agent helpers
+AGENT_*.sh

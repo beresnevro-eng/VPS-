@@ -1,0 +1,97 @@
+:root {
+  --bg: #1a2420;
+  --bg-soft: #24302b;
+  --ink: #f3efe6;
+  --muted: #a8b5ae;
+  --accent: #c9a96e;
+  --leaf: #7d9b82;
+  --radius: 18px;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse at 20% 0%, #2f3f36 0%, transparent 55%),
+    radial-gradient(ellipse at 90% 20%, #3a3224 0%, transparent 40%),
+    var(--bg);
+}
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px 18px 48px;
+}
+
+.hero {
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 1.65rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.sub, .muted {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.card {
+  background: color-mix(in srgb, var(--bg-soft) 88%, black);
+  border: 1px solid color-mix(in srgb, var(--leaf) 35%, transparent);
+  border-radius: var(--radius);
+  padding: 16px 16px 14px;
+  margin-bottom: 14px;
+}
+
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: var(--leaf);
+  font-weight: 600;
+}
+
+.summary {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+#history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#history-list li {
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+#history-list li:first-child { border-top: 0; }
+
+.topic {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.date {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
