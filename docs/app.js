@@ -214,17 +214,48 @@ function showBootError(title, text) {
   $("pair-chip").hidden = true;
 }
 
+function parseTgWebAppDataFromHash(hash) {
+  const h = String(hash || "").replace(/^#/, "");
+  const key = "tgWebAppData=";
+  const i = h.indexOf(key);
+  if (i < 0) return "";
+  let rest = h.slice(i + key.length);
+  const m = rest.match(/&tgWebApp[A-Za-z]+=/);
+  if (m) rest = rest.slice(0, m.index);
+  if (!rest) return "";
+  try {
+    return decodeURIComponent(rest.replace(/\+/g, " "));
+  } catch (_) {
+    return rest;
+  }
+}
+
+function initDataFromTelegramStorage() {
+  try {
+    const raw = sessionStorage.getItem("__telegram__initParams");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    const data = parsed?.tgWebAppData;
+    return data && String(data).length > 20 ? String(data) : "";
+  } catch (_) {
+    return "";
+  }
+}
+
 function extractInitData() {
   const fromTg = getTg()?.initData;
-  if (fromTg && String(fromTg).length > 8) return fromTg;
+  if (fromTg && String(fromTg).length > 20) return fromTg;
 
-  // Hash, который Telegram кладёт при открытии WebApp
   try {
     const hash = window.location.hash || sessionStorage.getItem("shepot_launch_hash") || "";
-    if (hash.includes("tgWebAppData=")) {
-      const params = new URLSearchParams(hash.replace(/^#/, ""));
-      const raw = params.get("tgWebAppData");
-      if (raw && raw.length > 8) return raw;
+    const fromHash = parseTgWebAppDataFromHash(hash);
+    if (fromHash && fromHash.length > 20) {
+      try {
+        sessionStorage.setItem("shepot_tgWebAppData", fromHash);
+      } catch (_) {
+        /* ignore */
+      }
+      return fromHash;
     }
   } catch (_) {
     /* ignore */
@@ -232,15 +263,18 @@ function extractInitData() {
 
   try {
     const saved = sessionStorage.getItem("shepot_tgWebAppData");
-    if (saved && saved.length > 8) return saved;
+    if (saved && saved.length > 20) return saved;
   } catch (_) {
     /* ignore */
   }
 
+  const fromStore = initDataFromTelegramStorage();
+  if (fromStore) return fromStore;
+
   return "";
 }
 
-async function waitForInitData(timeoutMs = 5000) {
+async function waitForInitData(timeoutMs = 8000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const w = getTg();
@@ -291,7 +325,7 @@ async function bootSession() {
     return;
   }
 
-  const initData = await waitForInitData(5000);
+  const initData = await waitForInitData(8000);
   state.initData = initData;
   setDiag([
     `API: ${API_BASE}`,
@@ -302,19 +336,21 @@ async function bootSession() {
 
   if (!initData) {
     console.warn("[Shepot] empty initData", {
-      hash: (location.hash || "").slice(0, 80),
+      hash: (location.hash || "").slice(0, 120),
       saved: !!sessionStorage.getItem("shepot_tgWebAppData"),
+      tgStore: !!sessionStorage.getItem("__telegram__initParams"),
       unsafe: getTg()?.initDataUnsafe,
     });
     showBootError(
       "Сессия не получена",
-      "На macOS Telegram часто теряет сессию из‑за редиректа GitHub Pages. Закройте Mini App, в боте нажмите /menu и снова «🌿 Открыть Шёпот». Если не поможет — откройте с телефона."
+      "Полностью закройте Mini App (свайп вниз), в боте нажмите /menu и снова «🌿 Открыть Шёпот». Не открывайте ссылку из браузера."
     );
     setDiag([
       `API: ${API_BASE}`,
       `initData: ПУСТО`,
-      `hash: ${(location.hash || "нет").slice(0, 60)}`,
+      `hash: ${(location.hash || "нет").slice(0, 80)}`,
       `saved: ${sessionStorage.getItem("shepot_tgWebAppData") ? "да" : "нет"}`,
+      `tgStore: ${sessionStorage.getItem("__telegram__initParams") ? "да" : "нет"}`,
       `platform: ${getTg()?.platform || "—"}`,
     ]);
     return;

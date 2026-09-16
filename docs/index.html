@@ -5,20 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Шёпот — Люм</title>
   <script>
-    /* Сохраняем hash ДО всего: при редиректе GitHub Pages tgWebAppData может пропасть */
+    /* Критично: сохранить tgWebAppData ДО telegram-web-app.js (он чистит hash).
+       Нельзя URLSearchParams — внутри initData есть сырые &. */
     (function () {
+      function parseTgWebAppData(hash) {
+        hash = String(hash || "").replace(/^#/, "");
+        var key = "tgWebAppData=";
+        var i = hash.indexOf(key);
+        if (i < 0) return "";
+        var rest = hash.slice(i + key.length);
+        var m = rest.match(/&tgWebApp[A-Za-z]+=/);
+        var raw = m ? rest.slice(0, m.index) : rest;
+        if (!raw) return "";
+        try {
+          return decodeURIComponent(raw.replace(/\+/g, " "));
+        } catch (e) {
+          return raw;
+        }
+      }
       try {
-        var h = location.hash || "";
-        if (h.indexOf("tgWebAppData=") !== -1) {
-          sessionStorage.setItem("shepot_launch_hash", h);
-          var p = new URLSearchParams(h.replace(/^#/, ""));
-          var d = p.get("tgWebAppData");
-          if (d) sessionStorage.setItem("shepot_tgWebAppData", d);
+        var href = String(location.href || "");
+        var hash = location.hash || "";
+        var fromHash = parseTgWebAppData(hash);
+        if (!fromHash && href.indexOf("tgWebAppData=") !== -1) {
+          fromHash = parseTgWebAppData(href.split("#")[1] || "");
+        }
+        if (fromHash && fromHash.length > 20) {
+          sessionStorage.setItem("shepot_tgWebAppData", fromHash);
+          sessionStorage.setItem("shepot_launch_hash", hash || ("#" + href.split("#")[1]));
         }
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="./style.css?v=20260916e" />
+  <link rel="stylesheet" href="./style.css?v=20260916f" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script>
     try { window.Telegram?.WebApp?.ready(); } catch (e) {}
@@ -164,6 +183,6 @@
       </button>
     </nav>
   </div>
-  <script src="./app.js?v=20260916d"></script>
+  <script src="./app.js?v=20260916f"></script>
 </body>
 </html>
