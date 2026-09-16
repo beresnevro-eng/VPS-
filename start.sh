@@ -78,16 +78,14 @@ if ! grep -q '^GROQ_MODEL_FALLBACKS=' .env 2>/dev/null; then
   echo 'GROQ_MODEL_FALLBACKS=openai/gpt-oss-120b,qwen/qwen3.6-27b' >> .env
 fi
 
-# Освобождаем порт Mini App API (часто занят мёртвым uvicorn / старым туннелем)
-API_PORT="${API_PORT:-8080}"
-echo "=== Освобождаю порт ${API_PORT} ==="
-if command -v fuser >/dev/null 2>&1; then
-  fuser -k "${API_PORT}/tcp" 2>/dev/null || true
+# Порт API из .env (НИКОГДА не трогаем 8080 — там Xray/VPN)
+API_PORT="${API_PORT:-8787}"
+if [[ "$API_PORT" == "8080" ]]; then
+  echo "WARN: API_PORT=8080 конфликтует с Xray. Принудительно 8787."
+  API_PORT=8787
 fi
-for pid in $(ss -lntp 2>/dev/null | awk -v p=":${API_PORT}" '$4 ~ p {print}' | grep -oP 'pid=\K[0-9]+' || true); do
-  kill -9 "$pid" 2>/dev/null || true
-done
-sleep 1
+echo "=== Mini App API port: ${API_PORT} (8080 не трогаем) ==="
+# Порт освобождается убийством только нашего python-бота выше — без fuser -k
 
 : > bot.log
 nohup env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \

@@ -3,7 +3,7 @@
  * URL туннеля обновляется скриптом restart-tunnel.sh при перезапуске cloudflared.
  */
 window.SHEPOT_API_BASE =
-  window.SHEPOT_API_BASE || "https://REPLACE_WITH_TUNNEL.trycloudflare.com";
+  window.SHEPOT_API_BASE || "https://foster-develop-vhs-advert.trycloudflare.com";
 const API_BASE = String(window.SHEPOT_API_BASE).replace(/\/$/, "");
 
 const tg = window.Telegram?.WebApp;
