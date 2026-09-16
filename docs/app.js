@@ -153,6 +153,19 @@ function renderLastQuiz(quizzes) {
   card.dataset.quizId = String(q.quiz_id);
 }
 
+const STATUS_LABELS = {
+  collecting: "Сбор ответов",
+  exchanging: "Обмен ответами",
+  analysis_pending: "Ждём разбор",
+  closed: "Завершён",
+  analyzed: "С разбором",
+};
+
+function statusLabel(status) {
+  if (!status) return "";
+  return STATUS_LABELS[status] || status;
+}
+
 function renderHistory(quizzes) {
   const list = $("history-list");
   const empty = $("history-empty");
@@ -166,9 +179,10 @@ function renderHistory(quizzes) {
     const li = document.createElement("li");
     li.dataset.quizId = String(q.quiz_id);
     const label = q.topic_label || q.topic || "Квиз";
+    const st = statusLabel(q.status);
     li.innerHTML = `
       <div class="topic">${escapeHtml(label)}</div>
-      <div class="date">${escapeHtml(fmtDate(q.date))} · ${escapeHtml(q.status || "")}</div>
+      <div class="date">${escapeHtml(fmtDate(q.date))}${st ? ` · ${escapeHtml(st)}` : ""}</div>
       <div class="analysis preview">${escapeHtml((q.analysis || "").slice(0, 160))}</div>
     `;
     li.addEventListener("click", () => openQuizDetail(q.quiz_id));
@@ -287,11 +301,22 @@ async function bootSession() {
   ]);
 
   if (!initData) {
-    console.warn("[Shepot] empty initData", getTg()?.initDataUnsafe);
+    console.warn("[Shepot] empty initData", {
+      hash: (location.hash || "").slice(0, 80),
+      saved: !!sessionStorage.getItem("shepot_tgWebAppData"),
+      unsafe: getTg()?.initDataUnsafe,
+    });
     showBootError(
       "Сессия не получена",
-      "Закройте Mini App полностью и снова нажмите «🌿 Открыть Шёпот» в боте."
+      "На macOS Telegram часто теряет сессию из‑за редиректа GitHub Pages. Закройте Mini App, в боте нажмите /menu и снова «🌿 Открыть Шёпот». Если не поможет — откройте с телефона."
     );
+    setDiag([
+      `API: ${API_BASE}`,
+      `initData: ПУСТО`,
+      `hash: ${(location.hash || "нет").slice(0, 60)}`,
+      `saved: ${sessionStorage.getItem("shepot_tgWebAppData") ? "да" : "нет"}`,
+      `platform: ${getTg()?.platform || "—"}`,
+    ]);
     return;
   }
 
