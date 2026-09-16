@@ -86,14 +86,14 @@ class OnboardingGateMiddleware(BaseMiddleware):
         if isinstance(event, CallbackQuery):
             await event.answer("Сначала анкета", show_alert=False)
             if event.message:
-                await event.message.answer(_GATE_TEXT, reply_markup=ob.main_menu_keyboard())
+                await event.message.answer(_GATE_TEXT, reply_markup=ob.main_menu_keyboard(event.from_user.id if event.from_user else None))
                 await start_onboarding(
                     event.message, state, resume=True, telegram_id=user.id
                 )
             return None
 
         if isinstance(event, Message):
-            await event.answer(_GATE_TEXT, reply_markup=ob.main_menu_keyboard())
+            await event.answer(_GATE_TEXT, reply_markup=ob.main_menu_keyboard(event.from_user.id if event.from_user else None))
             await start_onboarding(event, state, resume=True, telegram_id=user.id)
             return None
 

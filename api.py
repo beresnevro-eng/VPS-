@@ -153,7 +153,8 @@ def require_partner(user_id: int) -> None:
 
 
 class AuthRequest(BaseModel):
-    initData: str = Field(..., min_length=10)
+    initData: str = Field(default="", description="Telegram WebApp initData")
+    token: str = Field(default="", description="Подпись из URL кнопки бота")
 
 
 class AuthResponse(BaseModel):
@@ -164,14 +165,36 @@ class AuthResponse(BaseModel):
     assistant: str
 
 
+def _auth_info_from_token(token: str) -> dict[str, Any]:
+    from mini_auth import verify_mini_app_token
+
+    try:
+        user_id = verify_mini_app_token(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    require_partner(user_id)
+    return {
+        "user_id": user_id,
+        "username": None,
+        "first_name": config.partner_name(user_id),
+        "auth_via": "token",
+    }
+
+
 async def auth_from_header(
     x_telegram_init_data: Optional[str] = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_shepot_auth_token: Optional[str] = Header(default=None, alias="X-Shepot-Auth-Token"),
     initData: Optional[str] = Query(default=None),
 ) -> dict[str, Any]:
-    """Зависимость: валидирует initData из заголовка или query."""
+    """Зависимость: initData из Telegram ИЛИ токен с кнопки бота."""
+    if x_shepot_auth_token:
+        return _auth_info_from_token(x_shepot_auth_token)
     raw = x_telegram_init_data or initData
     if not raw:
-        raise HTTPException(status_code=401, detail="Нужен X-Telegram-Init-Data или initData")
+        raise HTTPException(
+            status_code=401,
+            detail="Нужен X-Telegram-Init-Data или X-Shepot-Auth-Token",
+        )
     info = validate_webapp_init_data(raw, config.BOT_TOKEN)
     require_partner(info["user_id"])
     return info
@@ -185,9 +208,15 @@ async def health() -> dict[str, str]:
 
 @app.post("/api/auth", response_model=AuthResponse)
 async def api_auth(body: AuthRequest) -> AuthResponse:
-    info = validate_webapp_init_data(body.initData, config.BOT_TOKEN)
+    if (body.token or "").strip():
+        info = _auth_info_from_token(body.token.strip())
+    elif (body.initData or "").strip():
+        info = validate_webapp_init_data(body.initData.strip(), config.BOT_TOKEN)
+        require_partner(info["user_id"])
+    else:
+        raise HTTPException(status_code=401, detail="Нужен initData или token")
+
     user_id = info["user_id"]
-    require_partner(user_id)
     name = config.partner_name(user_id)
     return AuthResponse(
         user_id=user_id,

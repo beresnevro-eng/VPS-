@@ -9,7 +9,7 @@
     window.SHEPOT_API_BASE = window.SHEPOT_API_BASE || location.origin;
   } else {
     window.SHEPOT_API_BASE =
-      window.SHEPOT_API_BASE || "https://foster-develop-vhs-advert.trycloudflare.com";
+      window.SHEPOT_API_BASE || "https://refer-sold-advocacy-fragrances.trycloudflare.com";
   }
 })();
 const API_BASE = String(window.SHEPOT_API_BASE || "").replace(/\/$/, "");
@@ -28,6 +28,7 @@ const state = {
   portraitWho: "me",
   starting: false,
   initData: "",
+  authToken: "",
 };
 
 function escapeHtml(s) {
@@ -57,6 +58,8 @@ async function apiFetch(path, options = {}) {
   };
   const initData = options.initData ?? state.initData ?? getTg()?.initData ?? "";
   if (initData) headers["X-Telegram-Init-Data"] = initData;
+  const token = options.token ?? state.authToken ?? "";
+  if (token) headers["X-Shepot-Auth-Token"] = token;
 
   const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
   let res;
@@ -301,6 +304,26 @@ async function waitForInitData(timeoutMs = 8000) {
   return extractInitData();
 }
 
+function extractLaunchToken() {
+  try {
+    const q = new URLSearchParams(window.location.search || "");
+    const t = q.get("t");
+    if (t && t.length > 10) {
+      sessionStorage.setItem("shepot_auth_t", t);
+      return t;
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  try {
+    const saved = sessionStorage.getItem("shepot_auth_t");
+    if (saved && saved.length > 10) return saved;
+  } catch (_) {
+    /* ignore */
+  }
+  return "";
+}
+
 async function bootSession() {
   const w = getTg();
   if (w) {
@@ -319,13 +342,18 @@ async function bootSession() {
   const sk = document.querySelector("#home-status-card [data-sk]");
   if (sk) sk.hidden = false;
   $("home-status").hidden = true;
+
+  const launchToken = extractLaunchToken();
+  state.authToken = launchToken;
+
   setDiag([
+    `host: ${location.host}`,
     `API: ${API_BASE}`,
-    `Telegram SDK: ${getTg() ? "да" : "нет"}`,
+    `token: ${launchToken ? "да" : "нет"}`,
     `platform: ${getTg()?.platform || "—"}`,
   ]);
 
-  if (!getTg()) {
+  if (!getTg() && !launchToken) {
     showBootError(
       "Нет Telegram SDK",
       "Страница открыта вне WebApp. Нажмите «🌿 Открыть Шёпот» в чате с ботом."
@@ -333,67 +361,63 @@ async function bootSession() {
     return;
   }
 
-  const initData = await waitForInitData(8000);
+  const initData = await waitForInitData(2500);
   state.initData = initData;
-  setDiag([
-    `API: ${API_BASE}`,
-    `initData: ${initData ? initData.length + " символов" : "ПУСТО"}`,
-    `user: ${getTg()?.initDataUnsafe?.user?.id || "—"}`,
-    `platform: ${getTg()?.platform || "—"}`,
-  ]);
 
-  if (!initData) {
-    console.warn("[Shepot] empty initData", {
+  if (!initData && !launchToken) {
+    console.warn("[Shepot] empty initData and token", {
+      host: location.host,
       hash: (location.hash || "").slice(0, 120),
-      saved: !!sessionStorage.getItem("shepot_tgWebAppData"),
-      tgStore: !!sessionStorage.getItem("__telegram__initParams"),
-      unsafe: getTg()?.initDataUnsafe,
     });
     showBootError(
       "Сессия не получена",
-      "Полностью закройте Mini App (свайп вниз), в боте нажмите /menu и снова «🌿 Открыть Шёпот». Не открывайте ссылку из браузера."
+      "Закройте Mini App, в боте нажмите /menu (обновит кнопку) и снова «🌿 Открыть Шёпот»."
     );
     setDiag([
+      `host: ${location.host}`,
       `API: ${API_BASE}`,
       `initData: ПУСТО`,
-      `hash: ${(location.hash || "нет").slice(0, 80)}`,
-      `saved: ${sessionStorage.getItem("shepot_tgWebAppData") ? "да" : "нет"}`,
-      `tgStore: ${sessionStorage.getItem("__telegram__initParams") ? "да" : "нет"}`,
+      `token: нет`,
+      `hash: ${(location.hash || "нет").slice(0, 70)}`,
       `platform: ${getTg()?.platform || "—"}`,
     ]);
     return;
   }
 
   try {
-    // быстрый ping API до auth
-    const health = await fetch(`${API_BASE}/api/health`, { method: "GET" }).then((r) =>
-      r.json()
-    ).catch((e) => ({ error: String(e.message || e) }));
+    const health = await fetch(`${API_BASE}/api/health`, { method: "GET" })
+      .then((r) => r.json())
+      .catch((e) => ({ error: String(e.message || e) }));
     setDiag([
+      `host: ${location.host}`,
       `API: ${API_BASE}`,
       `health: ${health.status || health.error || JSON.stringify(health)}`,
-      `initData: ${initData.length} символов`,
-      `user: ${getTg()?.initDataUnsafe?.user?.id || "—"}`,
+      `initData: ${initData ? initData.length + " симв." : "ПУСТО"}`,
+      `token: ${launchToken ? "да" : "нет"}`,
     ]);
 
+    const authBody = launchToken
+      ? { token: launchToken, initData: initData || "" }
+      : { initData };
     state.auth = await apiFetch("/api/auth", {
       method: "POST",
-      body: { initData },
+      body: authBody,
     });
     await refreshAll();
     $("cta-retry").hidden = true;
-    // после успеха diag можно свернуть
     setDiag([
-      `Загружено квизов: ${state.history.length}`,
+      `host: ${location.host}`,
+      `квизов: ${state.history.length}`,
+      `вход: ${launchToken ? "token" : "initData"}`,
       `CTA: ${state.active?.cta || "—"}`,
     ]);
   } catch (err) {
     console.error("[Shepot]", err);
     showBootError("Не удалось загрузить данные", String(err.message || err));
     setDiag([
+      `host: ${location.host}`,
       `API: ${API_BASE}`,
       `ошибка: ${String(err.message || err)}`,
-      `initData: ${initData.length} символов`,
     ]);
   }
 }

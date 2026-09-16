@@ -68,6 +68,16 @@ def mini_app_web_info() -> WebAppInfo:
     return WebAppInfo(url=get_mini_app_url())
 
 
+def mini_app_web_info_for(user_id: int) -> WebAppInfo:
+    """Персональный URL с токеном — работает даже без initData от Telegram."""
+    from mini_auth import make_mini_app_token
+
+    base = get_mini_app_url()
+    token = make_mini_app_token(int(user_id))
+    sep = "&" if "?" in base else "?"
+    return WebAppInfo(url=f"{base}{sep}t={token}")
+
+
 # Тексты постоянной клавиатуры (ReplyKeyboard) — всегда под рукой
 BTN_SHEPOT = "🌿 Открыть Шёпот"
 BTN_QUIZ = "💌 Квиз"
@@ -81,11 +91,12 @@ BTN_MENU = "🏠 Меню"
 MENU_BUTTON_TEXTS = {BTN_QUIZ, BTN_STATUS, BTN_PROFILE, BTN_DIGEST, BTN_HELP, BTN_MENU}
 
 
-def main_menu_keyboard() -> ReplyKeyboardMarkup:
+def main_menu_keyboard(user_id: int | None = None) -> ReplyKeyboardMarkup:
     """Постоянные кнопки: Mini App сверху, дальше движок бота."""
+    web = mini_app_web_info_for(user_id) if user_id else mini_app_web_info()
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=BTN_SHEPOT, web_app=mini_app_web_info())],
+            [KeyboardButton(text=BTN_SHEPOT, web_app=web)],
             [KeyboardButton(text=BTN_QUIZ), KeyboardButton(text=BTN_STATUS)],
             [KeyboardButton(text=BTN_PROFILE), KeyboardButton(text=BTN_DIGEST)],
             [KeyboardButton(text=BTN_HELP)],

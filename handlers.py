@@ -153,12 +153,13 @@ async def _show_main_menu(message: Message, text: str | None = None) -> None:
     name = config.partner_name(message.from_user.id)
     body = text or ai_service.as_lumen(
         f"Меню для {name}\n\n"
-        f"Нажми «{ob.BTN_QUIZ}», чтобы Люм задал вам вопросы на сегодня.\n"
+        f"«{ob.BTN_SHEPOT}» — пульт: история, портреты, внеочередной квиз.\n"
+        f"«{ob.BTN_QUIZ}» — ежедневные/ручные вопросы в чате.\n"
         f"«{ob.BTN_STATUS}» — где вы сейчас.\n"
         f"«{ob.BTN_PROFILE}» — портрет от Люма.\n"
         f"«{ob.BTN_DIGEST}» — мягкие итоги недели."
     )
-    await message.answer(body, reply_markup=ob.main_menu_keyboard())
+    await message.answer(body, reply_markup=ob.main_menu_keyboard(message.from_user.id))
 
 
 START_GREETING = (
@@ -202,7 +203,7 @@ async def start_onboarding(
             if step >= ob.base_total():
                 await message.answer(
                     "Продолжаем уточняющие вопросы…",
-                    reply_markup=ob.main_menu_keyboard(),
+                    reply_markup=ob.main_menu_keyboard(message.from_user.id),
                 )
                 await _resume_followups(message, state, profile, telegram_id=tg_id)
                 return
@@ -212,7 +213,7 @@ async def start_onboarding(
             "Это поможет Люму лучше понимать вас. Можно отвечать кнопками или текстом.\n"
             "Меню внизу уже доступно."
         ),
-        reply_markup=ob.main_menu_keyboard(),
+        reply_markup=ob.main_menu_keyboard(message.from_user.id),
     )
     await _send_base_step(message, state, step)
 
@@ -302,19 +303,19 @@ async def _finalize_profile(
             ai_service.as_lumen(
                 f"✅ Анкета завершена!\n\n👤 Ваш портрет:\n\n{summary[:3500]}"
             ),
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(message.from_user.id),
         )
         await message.answer(
             ai_service.as_lumen(
                 "Можно начинать ежедневный квиз 👇\n"
                 f"{ai_service.random_open_question()}"
             ),
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(message.from_user.id),
         )
     else:
         await message.answer(
             summary,  # уже PROFILE_API_SOFT_FAIL с 🌿
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(message.from_user.id),
         )
 
 
@@ -347,10 +348,10 @@ async def retry_profile_summary_if_pending(message: Message) -> bool:
     if ok:
         await message.answer(
             ai_service.as_lumen(f"👤 Ваш портрет:\n\n{summary[:3500]}"),
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(message.from_user.id),
         )
     else:
-        await message.answer(summary, reply_markup=ob.main_menu_keyboard())
+        await message.answer(summary, reply_markup=ob.main_menu_keyboard(message.from_user.id))
     return True
 
 
@@ -492,7 +493,7 @@ async def cmd_start(
 
     await message.answer(
         ai_service.as_lumen(START_GREETING),
-        reply_markup=ob.main_menu_keyboard(),
+        reply_markup=ob.main_menu_keyboard(chat_id),
     )
     async with get_session() as session:
         done = await profile_is_completed(session, message.from_user.id)
@@ -525,7 +526,7 @@ async def _handle_discuss_deeplink(
     except ValueError:
         await message.answer(
             ai_service.as_lumen("Не нашёл этот квиз. Открой историю в Mini App ещё раз."),
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(chat_id),
         )
         return
 
@@ -534,7 +535,7 @@ async def _handle_discuss_deeplink(
         if not quiz:
             await message.answer(
                 ai_service.as_lumen("Этот квиз уже не доступен."),
-                reply_markup=ob.main_menu_keyboard(),
+                reply_markup=ob.main_menu_keyboard(chat_id),
             )
             return
         analysis = (quiz.analysis_text or "").strip()
@@ -568,7 +569,7 @@ async def _handle_discuss_deeplink(
                 f"📖 {label}\n\nРазбор Люма ещё готовится или был коротким. "
                 "Но мы всё равно можем обсудить ваши ответы."
             ),
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(chat_id),
         )
 
     await message.answer(
@@ -598,7 +599,7 @@ async def cmd_profile(message: Message) -> None:
         if not profile.is_completed:
             await message.answer(
                 "Профиль ещё не готов. Напишите /start, чтобы продолжить анкету.",
-                reply_markup=ob.main_menu_keyboard(),
+                reply_markup=ob.main_menu_keyboard(message.from_user.id),
             )
             return
         if not profile.ai_summary:
@@ -610,7 +611,7 @@ async def cmd_profile(message: Message) -> None:
                     f"👤 Мой профиль\n\n{profile.ai_summary[:3800]}\n\n"
                     f"💬 {ai_service.random_open_question()}"
                 ),
-                reply_markup=ob.main_menu_keyboard(),
+                reply_markup=ob.main_menu_keyboard(message.from_user.id),
             )
             return
     await retry_profile_summary_if_pending(message)
@@ -645,19 +646,21 @@ async def cmd_help(message: Message) -> None:
     await message.answer(
         ai_service.as_lumen(
             "Я — Люм, помощник проекта «Шёпот».\n\n"
-            f"Нажми «{ob.BTN_QUIZ}», чтобы Люм задал вам вопросы на сегодня.\n"
+            f"«{ob.BTN_SHEPOT}» — Mini App (история, портреты, темы, «хочу обсудить сейчас»).\n"
+            f"«{ob.BTN_QUIZ}» — запустить квиз в чате.\n"
             f"«{ob.BTN_STATUS}» — где вы сейчас в квизе.\n"
             f"«{ob.BTN_PROFILE}» — ваш портрет от Люма.\n"
             f"«{ob.BTN_DIGEST}» — итоги недели.\n\n"
-            "1) Анкета (15 + 3 уточнения) → портрет\n"
-            "2) Ежедневный квиз\n"
-            "3) Итоги недели — паттерн и 3 шага\n\n"
+            "Как пользоваться:\n"
+            "• Утром бот сам присылает квиз — отвечайте кнопками в чате.\n"
+            "• Вне очереди — откройте Шёпот → «Хочу обсудить сейчас».\n"
+            "• Вечером — Шёпот → История / Мы.\n\n"
             "/onboarding — анкета заново\n"
             "/reset_topics — снова открыть закрытые темы\n"
             "/cancel — сбросить ввод\n\n"
             f"{ai_service.random_open_question()}"
         ),
-        reply_markup=ob.main_menu_keyboard(),
+        reply_markup=ob.main_menu_keyboard(message.from_user.id),
     )
 
 
@@ -666,7 +669,7 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
     if not _only_partners_user(message.from_user.id if message.from_user else None):
         return
     await state.clear()
-    await message.answer("Ок, сброшено.", reply_markup=ob.main_menu_keyboard())
+    await message.answer("Ок, сброшено.", reply_markup=ob.main_menu_keyboard(message.from_user.id))
 
 
 @router.message(Command("status"))
@@ -677,7 +680,7 @@ async def cmd_status(message: Message) -> None:
     async with get_session() as session:
         quiz = await get_active_quiz(session)
         if not quiz:
-            await message.answer("Активного квиза нет.", reply_markup=ob.main_menu_keyboard())
+            await message.answer("Активного квиза нет.", reply_markup=ob.main_menu_keyboard(message.from_user.id))
             return
         qs = (
             await session.execute(
@@ -696,7 +699,7 @@ async def cmd_status(message: Message) -> None:
         await message.answer(
             f"Квиз #{quiz.id}\nТема: {quiz.topic}\nСтатус: {quiz.status}\n"
             f"Ваших ответов: {done}/{len(qs)}",
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(message.from_user.id),
         )
 
 
@@ -705,7 +708,7 @@ async def cmd_status(message: Message) -> None:
 async def cmd_digest(message: Message, bot: Bot, state: FSMContext) -> None:
     if not _only_partners_user(message.from_user.id if message.from_user else None):
         return
-    await message.answer("Собираю итоги недели…", reply_markup=ob.main_menu_keyboard())
+    await message.answer("Собираю итоги недели…", reply_markup=ob.main_menu_keyboard(message.from_user.id))
     await send_weekly_digest(bot, only_chat=message.chat.id, state=state)
 
 
@@ -722,7 +725,7 @@ async def cmd_quiz(message: Message, state: FSMContext, bot: Bot) -> None:
                     "У нас уже есть активный квиз на сегодня. "
                     "Давай сначала закончим его, а потом я задам новые вопросы."
                 ),
-                reply_markup=ob.main_menu_keyboard(),
+                reply_markup=ob.main_menu_keyboard(message.from_user.id),
             )
             return
     await message.answer(
@@ -744,7 +747,7 @@ async def cmd_reset_topics(message: Message) -> None:
             "Хорошо. Все темы снова открыты — могу спрашивать обо всём, "
             "что помогает вашей связи."
         ),
-        reply_markup=ob.main_menu_keyboard(),
+        reply_markup=ob.main_menu_keyboard(message.from_user.id),
     )
 
 
@@ -767,7 +770,7 @@ async def on_mood_chosen(callback: CallbackQuery, state: FSMContext, bot: Bot) -
                     "У нас уже есть активный квиз на сегодня. "
                     "Давай сначала закончим его, а потом я задам новые вопросы."
                 ),
-                reply_markup=ob.main_menu_keyboard(),
+                reply_markup=ob.main_menu_keyboard(callback.from_user.id),
             )
             return
         blocked = await couple_blocked_topics(session)
@@ -790,7 +793,7 @@ async def on_mood_chosen(callback: CallbackQuery, state: FSMContext, bot: Bot) -
                 "Похоже, почти все темы сейчас закрыты. "
                 "Напиши /reset_topics, если хочешь открыть их снова."
             ),
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(callback.from_user.id),
         )
         return
 
@@ -830,7 +833,7 @@ async def on_block_topic(callback: CallbackQuery) -> None:
                 "Понял. Больше не буду спрашивать об этом. "
                 "Если передумаешь, напиши /reset_topics"
             ),
-            reply_markup=ob.main_menu_keyboard(),
+            reply_markup=ob.main_menu_keyboard(callback.from_user.id),
         )
 
 
@@ -1236,7 +1239,7 @@ async def on_discuss_message(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     ctx = data.get("quiz_context") or ""
     reply = await ai_service.discuss_with_psychologist(message.text or "", ctx)
-    await message.answer(reply[:4000], reply_markup=ob.main_menu_keyboard())
+    await message.answer(reply[:4000], reply_markup=ob.main_menu_keyboard(message.from_user.id))
 
 
 @router.message(F.text, QuizFSM.answering)
@@ -1494,7 +1497,7 @@ async def handle_digest_reply(message: Message, state: FSMContext) -> None:
             await update_digest_reply_ai(session, reply_id, ai_reply)
 
         await state.clear()
-        await message.answer(ai_reply[:4000], reply_markup=ob.main_menu_keyboard())
+        await message.answer(ai_reply[:4000], reply_markup=ob.main_menu_keyboard(message.from_user.id))
     except Exception as e:
         logging.error("Ошибка при ответе на дайджест: %s", e)
         try:
@@ -1518,7 +1521,7 @@ async def on_digest_skip(callback: CallbackQuery, state: FSMContext) -> None:
         if callback.message:
             await callback.message.answer(
                 ai_service.as_lumen("Хорошо, я рядом, когда захочешь поговорить"),
-                reply_markup=ob.main_menu_keyboard(),
+                reply_markup=ob.main_menu_keyboard(callback.from_user.id),
             )
     except Exception as e:
         logging.error("Ошибка skip дайджеста: %s", e)
