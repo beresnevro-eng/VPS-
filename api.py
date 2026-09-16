@@ -22,10 +22,15 @@ import config
 from database import (
     Quiz,
     UserProfile,
+    add_blocked_topic,
+    couple_blocked_topics,
+    get_collecting_quiz,
     get_session,
     get_user_by_telegram,
     load_quiz_for_analysis,
     parse_blocked_topics,
+    remove_blocked_topic,
+    user_finished_quiz,
 )
 
 logger = logging.getLogger(__name__)
@@ -235,16 +240,21 @@ async def api_history(
 async def api_profile(
     auth: dict[str, Any] = Depends(auth_from_header),
 ) -> dict[str, Any]:
-    """Портрет UserProfile + блокировки тем."""
+    """Портрет пользователя + публичная часть портрета партнёра + блокировки."""
     user_id = auth["user_id"]
+    partner_id = _partner_telegram_id(user_id)
+
     async with get_session() as session:
         profile = await session.get(UserProfile, user_id)
         user = await get_user_by_telegram(session, user_id)
+        partner_payload = await _partner_profile_payload(session, partner_id)
+
         if not profile:
             return {
                 "user_id": user_id,
                 "name": config.partner_name(user_id),
                 "partner_name": _partner_of(user_id),
+                "partner": partner_payload,
                 "is_completed": False,
                 "ai_summary": None,
                 "blocked_topics": [],
@@ -257,6 +267,7 @@ async def api_profile(
             "user_id": user_id,
             "name": (user.name if user else "") or config.partner_name(user_id),
             "partner_name": _partner_of(user_id),
+            "partner": partner_payload,
             "is_completed": bool(profile.is_completed),
             "ai_summary": profile.ai_summary,
             "blocked_topics": blocked,
@@ -265,3 +276,259 @@ async def api_profile(
             "bot_username": "Familia_Quiz_bot",
             "updated_at": profile.updated_at.isoformat() + "Z" if profile.updated_at else None,
         }
+
+
+def _partner_telegram_id(user_id: int) -> Optional[int]:
+    if user_id == config.PARTNER_A_ID and config.PARTNER_B_ID:
+        return config.PARTNER_B_ID
+    if user_id == config.PARTNER_B_ID and config.PARTNER_A_ID:
+        return config.PARTNER_A_ID
+    ids = [i for i in config.partner_ids() if i != user_id]
+    return ids[0] if ids else None
+
+
+async def _partner_profile_payload(session, partner_id: Optional[int]) -> dict[str, Any]:
+    if not partner_id:
+        return {
+            "user_id": None,
+            "name": "",
+            "is_completed": False,
+            "ai_summary": None,
+        }
+    profile = await session.get(UserProfile, partner_id)
+    user = await get_user_by_telegram(session, partner_id)
+    name = (user.name if user else "") or config.partner_name(partner_id)
+    if not profile:
+        return {
+            "user_id": partner_id,
+            "name": name,
+            "is_completed": False,
+            "ai_summary": None,
+        }
+    return {
+        "user_id": partner_id,
+        "name": name,
+        "is_completed": bool(profile.is_completed),
+        "ai_summary": profile.ai_summary,
+        "updated_at": profile.updated_at.isoformat() + "Z" if profile.updated_at else None,
+    }
+
+
+class QuizStartRequest(BaseModel):
+    mood_code: str = Field(..., min_length=2, max_length=32)
+
+
+class TopicBlockRequest(BaseModel):
+    code: str = Field(..., min_length=2, max_length=32)
+    blocked: bool = True
+
+
+@app.get("/api/moods")
+async def api_moods(
+    auth: dict[str, Any] = Depends(auth_from_header),
+) -> dict[str, Any]:
+    """Каталог настроений + какие темы закрыты у пары."""
+    async with get_session() as session:
+        blocked = await couple_blocked_topics(session)
+    blocked_set = set(blocked)
+    moods = []
+    for code, meta in config.MOOD_CATALOG.items():
+        moods.append(
+            {
+                "code": code,
+                "label": meta["label"],
+                "blocked": code != "surprise" and code in blocked_set,
+                "blockable": code != "surprise",
+            }
+        )
+    return {"moods": moods, "blocked": blocked}
+
+
+@app.get("/api/quiz/active")
+async def api_quiz_active(
+    auth: dict[str, Any] = Depends(auth_from_header),
+) -> dict[str, Any]:
+    """
+    Статус текущего квиза для трёх CTA на Главной:
+    - none → «Хочу обсудить сейчас»
+    - answer → «Ответить в боте»
+    - waiting → «Ждём партнёра» (пассивно)
+    """
+    user_id = auth["user_id"]
+    partner_name = _partner_of(user_id) or "партнёра"
+
+    async with get_session() as session:
+        quiz = await get_collecting_quiz(session)
+        if not quiz:
+            return {
+                "has_active": False,
+                "cta": "start",
+                "status_key": "none",
+                "status_text": "Можно начать разговор",
+                "quiz": None,
+                "you_finished": False,
+                "partner_finished": False,
+                "bot_url": "https://t.me/Familia_Quiz_bot",
+            }
+
+        you_done = await user_finished_quiz(session, quiz.id, user_id)
+        partner_id = _partner_telegram_id(user_id)
+        partner_done = (
+            await user_finished_quiz(session, quiz.id, partner_id) if partner_id else False
+        )
+
+        if you_done and not partner_done:
+            cta = "waiting"
+            status_key = "waiting_partner"
+            status_text = f"Ждём {partner_name}"
+        elif not you_done:
+            cta = "answer"
+            status_key = "need_answer"
+            if partner_done:
+                status_text = f"{partner_name} уже ответил(а) · ваш черёд"
+            else:
+                status_text = "Есть открытый квиз — продолжите в чате"
+        else:
+            # оба закончили, но статус ещё collecting на мгновение
+            cta = "waiting"
+            status_key = "finishing"
+            status_text = "Люм готовит сравнение…"
+
+        return {
+            "has_active": True,
+            "cta": cta,
+            "status_key": status_key,
+            "status_text": status_text,
+            "you_finished": you_done,
+            "partner_finished": partner_done,
+            "bot_url": "https://t.me/Familia_Quiz_bot",
+            "quiz": {
+                "quiz_id": quiz.id,
+                "topic": quiz.topic,
+                "topic_code": quiz.topic_code or "",
+                "topic_label": config.mood_label(quiz.topic_code)
+                if quiz.topic_code
+                else (quiz.topic or ""),
+                "status": quiz.status,
+                "date": (quiz.created_at or datetime.utcnow()).isoformat() + "Z",
+                "discuss_url": f"https://t.me/Familia_Quiz_bot?start=discuss_{quiz.id}",
+            },
+        }
+
+
+@app.post("/api/quiz/start")
+async def api_quiz_start(
+    body: QuizStartRequest,
+    auth: dict[str, Any] = Depends(auth_from_header),
+) -> dict[str, Any]:
+    """Запуск внеочередного квиза (тот же движок, что /quiz + mood: в боте)."""
+    code = (body.mood_code or "").strip().lower()
+    if code not in config.MOOD_CATALOG:
+        raise HTTPException(status_code=400, detail="Неизвестное настроение")
+
+    async with get_session() as session:
+        active = await get_collecting_quiz(session)
+        if active:
+            raise HTTPException(
+                status_code=409,
+                detail="Уже есть активный квиз. Сначала закончите его в чате с ботом.",
+            )
+        blocked = await couple_blocked_topics(session)
+
+    if code != "surprise" and code in blocked:
+        raise HTTPException(
+            status_code=400,
+            detail="Эта тема закрыта. Выберите другое настроение.",
+        )
+
+    # surprise → случайная незакрытая тема
+    from handlers import _pick_auto_topic_code, start_daily_quiz  # noqa: WPS433
+    import runtime as runtime_mod  # noqa: WPS433
+
+    resolved = _pick_auto_topic_code(blocked) if code == "surprise" else code
+    if not resolved:
+        raise HTTPException(
+            status_code=400,
+            detail="Почти все темы закрыты. Откройте часть тем в разделе «Мы».",
+        )
+
+    try:
+        bot = runtime_mod.get_bot()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Бот ещё не готов") from exc
+
+    # Фоном не нужно — дождёмся рассылки, чтобы клиент мог закрыть Mini App
+    await start_daily_quiz(
+        bot,
+        topic=config.mood_prompt(resolved),
+        topic_code=resolved,
+        notify_chat=auth["user_id"],
+        automatic=False,
+    )
+
+    return {
+        "ok": True,
+        "mood_code": resolved,
+        "mood_label": config.mood_label(resolved),
+        "message": "Квиз ушёл в чат с Люмом",
+        "bot_url": "https://t.me/Familia_Quiz_bot",
+    }
+
+
+@app.get("/api/quiz/{quiz_id}")
+async def api_quiz_detail(
+    quiz_id: int,
+    auth: dict[str, Any] = Depends(auth_from_header),
+) -> dict[str, Any]:
+    """Детали квиза: вопросы, ответы обоих, анализ Люма."""
+    async with get_session() as session:
+        quiz = await session.get(Quiz, quiz_id)
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Квиз не найден")
+        try:
+            payload = await load_quiz_for_analysis(session, quiz_id)
+        except Exception as exc:
+            logger.exception("quiz detail %s", quiz_id)
+            raise HTTPException(status_code=500, detail="Не удалось загрузить квиз") from exc
+
+    return {
+        "quiz_id": quiz.id,
+        "date": (quiz.created_at or datetime.utcnow()).isoformat() + "Z",
+        "topic": quiz.topic,
+        "topic_code": quiz.topic_code or "",
+        "topic_label": config.mood_label(quiz.topic_code)
+        if quiz.topic_code
+        else (quiz.topic or ""),
+        "status": quiz.status,
+        "analysis": quiz.analysis_text or "",
+        "questions": payload.get("questions") or [],
+        "discuss_url": f"https://t.me/Familia_Quiz_bot?start=discuss_{quiz.id}",
+        "bot_url": "https://t.me/Familia_Quiz_bot",
+    }
+
+
+@app.post("/api/topics/block")
+async def api_topics_block(
+    body: TopicBlockRequest,
+    auth: dict[str, Any] = Depends(auth_from_header),
+) -> dict[str, Any]:
+    """Блок / анблок темы для текущего пользователя (учитывается на уровне пары)."""
+    code = (body.code or "").strip().lower()
+    if code not in config.MOOD_CATALOG or code == "surprise":
+        raise HTTPException(status_code=400, detail="Эту тему нельзя закрыть")
+
+    user_id = auth["user_id"]
+    async with get_session() as session:
+        if body.blocked:
+            await add_blocked_topic(session, user_id, code)
+        else:
+            await remove_blocked_topic(session, user_id, code)
+        blocked = await couple_blocked_topics(session)
+
+    return {
+        "ok": True,
+        "code": code,
+        "label": config.mood_label(code),
+        "blocked": body.blocked,
+        "couple_blocked": blocked,
+    }

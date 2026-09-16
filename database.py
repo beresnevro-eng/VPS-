@@ -324,6 +324,40 @@ async def both_answered_quiz(session: AsyncSession, quiz_id: int) -> bool:
     return True
 
 
+async def user_finished_quiz(
+    session: AsyncSession, quiz_id: int, telegram_id: int
+) -> bool:
+    """True, если пользователь ответил на все вопросы квиза."""
+    user = await get_user_by_telegram(session, telegram_id)
+    if not user:
+        return False
+    questions = (
+        await session.execute(select(Question).where(Question.quiz_id == quiz_id))
+    ).scalars().all()
+    if not questions:
+        return False
+    for q in questions:
+        ans = await session.scalar(
+            select(Answer).where(
+                Answer.question_id == q.id,
+                Answer.user_id == user.id,
+            )
+        )
+        if ans is None:
+            return False
+    return True
+
+
+async def get_collecting_quiz(session: AsyncSession) -> Optional[Quiz]:
+    """Активный квиз в фазе сбора ответов."""
+    return await session.scalar(
+        select(Quiz)
+        .where(Quiz.status == "collecting")
+        .order_by(Quiz.id.desc())
+        .limit(1)
+    )
+
+
 async def save_answer(
     session: AsyncSession,
     question_id: int,
@@ -663,6 +697,19 @@ async def add_blocked_topic(
         profile.updated_at = datetime.utcnow()
         await session.commit()
         await session.refresh(profile)
+    return profile
+
+
+async def remove_blocked_topic(
+    session: AsyncSession, telegram_id: int, topic_code: str
+) -> UserProfile:
+    profile = await get_or_create_profile(session, telegram_id)
+    code = (topic_code or "").strip().lower()
+    codes = [c for c in parse_blocked_topics(profile.blocked_topics) if c != code]
+    profile.blocked_topics = ",".join(codes)
+    profile.updated_at = datetime.utcnow()
+    await session.commit()
+    await session.refresh(profile)
     return profile
 
 

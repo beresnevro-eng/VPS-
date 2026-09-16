@@ -99,6 +99,9 @@ async def main() -> None:
     await ensure_partners()
 
     bot = Bot(token=config.BOT_TOKEN)
+    import runtime as runtime_mod  # noqa: WPS433
+
+    runtime_mod.set_bot(bot)
     dp = Dispatcher(storage=MemoryStorage())
     setup_dispatcher(dp)
 

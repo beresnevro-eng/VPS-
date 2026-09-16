@@ -9,7 +9,7 @@ import random
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher, F, Router
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.base import BaseStorage, StorageKey
@@ -472,13 +472,24 @@ async def _send_question(bot: Bot, chat_id: int, question: Question, index: int,
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext) -> None:
+async def cmd_start(
+    message: Message, state: FSMContext, command: CommandObject
+) -> None:
     if not _only_partners_user(message.from_user.id if message.from_user else None):
         await message.answer(
             ai_service.as_lumen("Шёпот — только для нашей пары 🙂")
         )
         return
     await ensure_partners()
+
+    args = (command.args or "").strip()
+    if args.startswith("discuss_"):
+        await _handle_discuss_deeplink(message, state, args)
+        return
+    if args in ("onboarding", "start_onboarding"):
+        await start_onboarding(message, state, resume=False)
+        return
+
     await message.answer(
         ai_service.as_lumen(START_GREETING),
         reply_markup=ob.main_menu_keyboard(),
@@ -501,6 +512,71 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             f"С возвращением, {config.partner_name(message.from_user.id)}!\n"
             "Анкета уже пройдена. Нажми «Квиз», чтобы Люм задал вопросы на сегодня."
         ),
+    )
+
+
+async def _handle_discuss_deeplink(
+    message: Message, state: FSMContext, args: str
+) -> None:
+    """Deep link: t.me/Bot?start=discuss_{quiz_id}"""
+    raw = args.replace("discuss_", "", 1).strip()
+    try:
+        quiz_id = int(raw)
+    except ValueError:
+        await message.answer(
+            ai_service.as_lumen("Не нашёл этот квиз. Открой историю в Mini App ещё раз."),
+            reply_markup=ob.main_menu_keyboard(),
+        )
+        return
+
+    async with get_session() as session:
+        quiz = await session.get(Quiz, quiz_id)
+        if not quiz:
+            await message.answer(
+                ai_service.as_lumen("Этот квиз уже не доступен."),
+                reply_markup=ob.main_menu_keyboard(),
+            )
+            return
+        analysis = (quiz.analysis_text or "").strip()
+        topic = quiz.topic or ""
+        topic_code = quiz.topic_code or ""
+        try:
+            payload = await load_quiz_for_analysis(session, quiz_id)
+        except Exception:
+            payload = {"topic": topic, "questions": []}
+
+    ctx_lines = [f"Тема: {payload.get('topic') or topic}"]
+    for i, q in enumerate(payload.get("questions", []), 1):
+        ctx_lines.append(f"{i}. {q['text']}")
+        for a in q.get("answers", []):
+            mark = " (пропуск)" if a.get("skipped") else ""
+            val = a.get("selected_option") or a.get("text")
+            ctx_lines.append(f"   {a.get('name')}: {val}{mark}")
+
+    await state.set_state(QuizFSM.discussing)
+    await state.update_data(quiz_id=quiz_id, quiz_context="\n".join(ctx_lines)[:2000])
+
+    label = config.mood_label(topic_code) if topic_code else (topic or f"Квиз #{quiz_id}")
+    if analysis:
+        await message.answer(
+            ai_service.as_lumen(f"📖 {label}\n\n{analysis[:3500]}"),
+            reply_markup=_insights_keyboard(quiz_id, topic_code),
+        )
+    else:
+        await message.answer(
+            ai_service.as_lumen(
+                f"📖 {label}\n\nРазбор Люма ещё готовится или был коротким. "
+                "Но мы всё равно можем обсудить ваши ответы."
+            ),
+            reply_markup=ob.main_menu_keyboard(),
+        )
+
+    await message.answer(
+        ai_service.as_lumen(
+            "Что тебя зацепило больше всего?\n"
+            "Напиши пару слов — обсудим вместе.\n"
+            "Выйти: /cancel"
+        )
     )
 
 
@@ -980,6 +1056,37 @@ async def _advance_after_answer(
         await finish_quiz(bot, quiz_id)
     else:
         await bot.send_message(chat_id, "Все ваши ответы записаны ✅ Ждём партнёра…")
+        # Критичный пуш второму партнёру (ежедневный и внеочередной квиз)
+        if not config.is_solo_mode():
+            await _notify_partner_waiting(bot, finished_user_id=user_id, quiz_id=quiz_id)
+
+
+async def _notify_partner_waiting(
+    bot: Bot, *, finished_user_id: int, quiz_id: int
+) -> None:
+    """Пуш: один партнёр закончил — второму пора ответить."""
+    name = config.partner_name(finished_user_id) or "Партнёр"
+    text = ai_service.as_lumen(
+        f"{name} ответил на квиз ❤️\n"
+        "Открой чат и ответь — тогда Люм сравнит ваши ответы."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Открыть бота",
+                    url="https://t.me/Familia_Quiz_bot",
+                )
+            ]
+        ]
+    )
+    for tg_id in config.partner_ids():
+        if tg_id == finished_user_id:
+            continue
+        try:
+            await bot.send_message(tg_id, text, reply_markup=kb)
+        except Exception as exc:
+            logger.warning("partner-wait notify %s (quiz %s): %s", tg_id, quiz_id, exc)
 
 
 @router.callback_query(F.data.startswith("a:"))
