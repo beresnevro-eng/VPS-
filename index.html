@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Шёпот — Люм</title>
+  <script>
+    /* Критично: сохранить tgWebAppData ДО telegram-web-app.js (он чистит hash).
+       Нельзя URLSearchParams — внутри initData есть сырые &. */
+    (function () {
+      function parseTgWebAppData(hash) {
+        hash = String(hash || "").replace(/^#/, "");
+        var key = "tgWebAppData=";
+        var i = hash.indexOf(key);
+        if (i < 0) return "";
+        var rest = hash.slice(i + key.length);
+        var m = rest.match(/&tgWebApp[A-Za-z]+=/);
+        var raw = m ? rest.slice(0, m.index) : rest;
+        if (!raw) return "";
+        try {
+          return decodeURIComponent(raw.replace(/\+/g, " "));
+        } catch (e) {
+          return raw;
+        }
+      }
+      try {
+        var href = String(location.href || "");
+        var hash = location.hash || "";
+        var fromHash = parseTgWebAppData(hash);
+        if (!fromHash && href.indexOf("tgWebAppData=") !== -1) {
+          fromHash = parseTgWebAppData(href.split("#")[1] || "");
+        }
+        if (fromHash && fromHash.length > 20) {
+          sessionStorage.setItem("shepot_tgWebAppData", fromHash);
+          sessionStorage.setItem("shepot_launch_hash", hash || ("#" + href.split("#")[1]));
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="./style.css?v=20260916g" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    try { window.Telegram?.WebApp?.ready(); } catch (e) {}
+  </script>
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="topbar">
+      <p class="brand">Шёпот</p>
+      <p class="pair-chip" id="pair-chip" hidden></p>
+    </header>
+
+    <p id="diag" class="diag" hidden></p>
+
+    <div id="pull-indicator" class="pull-indicator" hidden>Обновляю…</div>
+    <div id="toast" class="toast" hidden></div>
+
+    <!-- HOME -->
+    <section class="tab-panel" data-tab="home" id="panel-home">
+      <div class="hero">
+        <h1 id="greeting">Загрузка…</h1>
+        <p class="sub" id="home-sub">Люм рядом</p>
+      </div>
+
+      <div class="card status-card" id="home-status-card">
+        <div class="skeleton sk-line" data-sk></div>
+        <p class="status-text" id="home-status" hidden></p>
+        <button type="button" class="cta cta-secondary" id="cta-retry" hidden>Повторить вход</button>
+        <button type="button" class="cta cta-primary" id="cta-start" hidden>Хочу обсудить сейчас</button>
+        <a class="cta cta-secondary" id="cta-answer" hidden href="https://t.me/Familia_Quiz_bot" target="_blank" rel="noopener">Ответить в боте</a>
+        <p class="cta-waiting" id="cta-waiting" hidden>
+          <span class="pulse"></span>
+          <span id="cta-waiting-text">Ждём партнёра</span>
+        </p>
+      </div>
+
+      <div class="card" id="last-quiz-card" hidden>
+        <div class="card-head">
+          <h2>Последний квиз</h2>
+          <button type="button" class="linkish" id="last-quiz-open">Открыть</button>
+        </div>
+        <p class="topic" id="last-quiz-topic"></p>
+        <p class="date" id="last-quiz-date"></p>
+        <p class="analysis preview" id="last-quiz-analysis"></p>
+        <a class="btn-outline" id="last-quiz-discuss" href="#" target="_blank" rel="noopener">Обсудить в боте</a>
+      </div>
+
+      <div class="card empty" id="home-empty" hidden>
+        <p>Пока тишина. Начните первый разговор.</p>
+        <button type="button" class="cta cta-primary" id="cta-start-empty">Хочу обсудить сейчас</button>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="tab-panel" data-tab="history" id="panel-history" hidden>
+      <h1 class="panel-title">История</h1>
+      <ul class="quiz-list" id="history-list"></ul>
+      <div class="card empty" id="history-empty" hidden>
+        <p>История появится после первого квиза.</p>
+        <button type="button" class="cta cta-primary" data-go-home>Начать первый</button>
+      </div>
+    </section>
+
+    <!-- WE -->
+    <section class="tab-panel" data-tab="we" id="panel-we" hidden>
+      <h1 class="panel-title">Мы</h1>
+      <div class="segment" id="portrait-segment">
+        <button type="button" class="seg active" data-who="me">Я</button>
+        <button type="button" class="seg" data-who="partner">Партнёр</button>
+      </div>
+      <div class="card" id="portrait-card">
+        <h2 id="portrait-name">—</h2>
+        <p class="summary" id="portrait-summary"></p>
+        <a class="btn-outline" id="portrait-onboarding" href="https://t.me/Familia_Quiz_bot?start=onboarding" target="_blank" rel="noopener" hidden>
+          Заполнить анкету в боте
+        </a>
+      </div>
+      <div class="card">
+        <h2>Темы</h2>
+        <p class="muted small">Закрытые темы Люм не предлагает в квизах.</p>
+        <div class="topics" id="topics-grid"></div>
+      </div>
+    </section>
+
+    <!-- MORE -->
+    <section class="tab-panel" data-tab="more" id="panel-more" hidden>
+      <h1 class="panel-title">Ещё</h1>
+      <div class="card">
+        <h2>Идеи для свиданий</h2>
+        <p class="muted">Скоро — подборки от Люма под ваше настроение.</p>
+        <span class="badge soon">Скоро</span>
+      </div>
+      <div class="card">
+        <h2>Как работает Шёпот</h2>
+        <p class="summary small">
+          Бот присылает вопросы и пуши. Mini App — пульт: история, портреты, темы и внеочередной квиз.
+          Ответы всегда в чате с Люмом.
+        </p>
+      </div>
+      <div class="card">
+        <a class="cta cta-secondary" href="https://t.me/Familia_Quiz_bot" target="_blank" rel="noopener">Открыть бота</a>
+      </div>
+    </section>
+
+    <!-- DETAIL SHEET -->
+    <div class="sheet" id="quiz-detail" hidden>
+      <div class="sheet-backdrop" data-close-detail></div>
+      <div class="sheet-panel">
+        <div class="sheet-handle"></div>
+        <button type="button" class="sheet-close" data-close-detail aria-label="Закрыть">×</button>
+        <h2 id="detail-title">Квиз</h2>
+        <p class="date" id="detail-date"></p>
+        <div id="detail-body" class="detail-body"></div>
+        <a class="cta cta-primary" id="detail-discuss" href="#" target="_blank" rel="noopener">Обсудить в боте</a>
+      </div>
+    </div>
+
+    <!-- MOOD SHEET -->
+    <div class="sheet" id="mood-sheet" hidden>
+      <div class="sheet-backdrop" data-close-mood></div>
+      <div class="sheet-panel">
+        <div class="sheet-handle"></div>
+        <button type="button" class="sheet-close" data-close-mood aria-label="Закрыть">×</button>
+        <h2>Какое настроение?</h2>
+        <p class="muted">Люм подберёт вопросы под выбранную тему.</p>
+        <div class="mood-grid" id="mood-grid"></div>
+        <p class="error" id="mood-error" hidden></p>
+      </div>
+    </div>
+
+    <nav class="tabbar" aria-label="Навигация">
+      <button type="button" class="tab active" data-tab="home">
+        <span class="tab-ico">⌂</span><span>Главная</span>
+      </button>
+      <button type="button" class="tab" data-tab="history">
+        <span class="tab-ico">☰</span><span>История</span>
+      </button>
+      <button type="button" class="tab" data-tab="we">
+        <span class="tab-ico">◎</span><span>Мы</span>
+      </button>
+      <button type="button" class="tab" data-tab="more">
+        <span class="tab-ico">✦</span><span>Ещё</span>
+      </button>
+    </nav>
+  </div>
+  <script src="./app.js?v=20260916g"></script>
+</body>
+</html>
