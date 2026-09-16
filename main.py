@@ -52,14 +52,33 @@ async def run_api() -> None:
         workers=1,
         loop="asyncio",
     )
+    # Не даём uvicorn.sys.exit уронить весь процесс (бот + scheduler)
+    uv_config.lifespan = "on"
     server = uvicorn.Server(uv_config)
+    server.install_signal_handlers = False
     logging.info("Mini App API: http://%s:%s", config.API_HOST, config.API_PORT)
-    await server.serve()
+    try:
+        await server.serve()
+    except SystemExit as exc:
+        logging.error(
+            "Mini App API не стартовал (код %s). Бот продолжит работать без API.",
+            getattr(exc, "code", exc),
+        )
+    except OSError as exc:
+        logging.error("Mini App API bind error: %s", exc)
 
 
 async def run_bot(bot: Bot, dp: Dispatcher, scheduler) -> None:
     try:
-        await dp.start_polling(bot, drop_pending_updates=True)
+        # handle_signals=False — иначе конфликт с uvicorn в одном процессе
+        await dp.start_polling(
+            bot,
+            drop_pending_updates=True,
+            handle_signals=False,
+        )
+    except Exception:
+        logging.exception("Telegram polling остановился")
+        raise
     finally:
         scheduler.shutdown(wait=False)
         await bot.session.close()
@@ -94,11 +113,15 @@ async def main() -> None:
         config.TIMEZONE,
     )
 
-    # Параллельно: polling + FastAPI (без отдельных воркеров)
-    await asyncio.gather(
+    # Параллельно: polling + FastAPI. Ошибка API не должна гасить бота.
+    results = await asyncio.gather(
         run_api(),
         run_bot(bot, dp, scheduler),
+        return_exceptions=True,
     )
+    for label, result in zip(("api", "bot"), results):
+        if isinstance(result, BaseException) and not isinstance(result, SystemExit):
+            logging.error("%s завершился с ошибкой: %s", label, result, exc_info=result)
 
 
 if __name__ == "__main__":

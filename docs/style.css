@@ -1,10 +1,13 @@
 :root {
-  --bg: #1a2420;
-  --bg-soft: #24302b;
-  --ink: #f3efe6;
-  --muted: #a8b5ae;
-  --accent: #c9a96e;
-  --leaf: #7d9b82;
+  --bg: #14181f;
+  --bg-soft: #1c2430;
+  --ink: #f0ecf6;
+  --muted: #9aa3b5;
+  --accent: #9b7ed9;
+  --accent-2: #6ec4a0;
+  --leaf: #6ec4a0;
+  --violet: #7b5cff;
+  --danger: #e07a7a;
   --radius: 18px;
   font-family: "Segoe UI", "Helvetica Neue", sans-serif;
 }
@@ -16,8 +19,8 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background:
-    radial-gradient(ellipse at 20% 0%, #2f3f36 0%, transparent 55%),
-    radial-gradient(ellipse at 90% 20%, #3a3224 0%, transparent 40%),
+    radial-gradient(ellipse at 15% 0%, rgba(123, 92, 255, 0.28) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 10%, rgba(110, 196, 160, 0.18) 0%, transparent 42%),
     var(--bg);
 }
 
@@ -27,9 +30,7 @@ body {
   padding: 24px 18px 48px;
 }
 
-.hero {
-  margin-bottom: 22px;
-}
+.hero { margin-bottom: 22px; }
 
 .eyebrow {
   margin: 0 0 8px;
@@ -51,9 +52,15 @@ h1 {
   line-height: 1.45;
 }
 
+.pair {
+  margin: 10px 0 0;
+  font-size: 0.92rem;
+  color: var(--accent-2);
+}
+
 .card {
-  background: color-mix(in srgb, var(--bg-soft) 88%, black);
-  border: 1px solid color-mix(in srgb, var(--leaf) 35%, transparent);
+  background: color-mix(in srgb, var(--bg-soft) 90%, black);
+  border: 1px solid color-mix(in srgb, var(--violet) 28%, transparent);
   border-radius: var(--radius);
   padding: 16px 16px 14px;
   margin-bottom: 14px;
@@ -68,9 +75,37 @@ h1 {
 
 .summary {
   white-space: pre-wrap;
-  line-height: 1.5;
+  line-height: 1.55;
   margin: 0;
   font-size: 0.95rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: color-mix(in srgb, var(--violet) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--ink);
+}
+
+.btn {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: #0f1218;
+  font-weight: 650;
+  background: linear-gradient(135deg, var(--accent-2), #9b7ed9);
 }
 
 #history-list {
@@ -80,7 +115,7 @@ h1 {
 }
 
 #history-list li {
-  padding: 10px 0;
+  padding: 12px 0;
   border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
@@ -94,4 +129,12 @@ h1 {
 .date {
   font-size: 0.8rem;
   color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.analysis {
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+  line-height: 1.45;
+  white-space: pre-wrap;
 }

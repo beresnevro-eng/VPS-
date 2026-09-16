@@ -39,19 +39,23 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    # GitHub Pages: корень user-site + типичные имена репозитория проекта
-    allow_origins=config.API_CORS_ORIGINS
-    or [
+    allow_origins=[
         "https://beresnevro-eng.github.io",
         "https://beresnevro-eng.github.io/VPS-",
-        "https://beresnevro-eng.github.io/shepot",
-        "https://beresnevro-eng.github.io/couple-quiz-bot",
-        "https://beresnevro-eng.github.io/whisper",
     ],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origin_regex=r"https://.*\.github\.io",
+    allow_credentials=False,  # cookies не нужны; так совместимее с WebView
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
+
+
+@app.options("/{full_path:path}")
+async def preflight(full_path: str) -> dict[str, bool]:
+    """Явный preflight для Telegram WebView / некоторых прокси."""
+    return {"ok": True}
 
 
 # --- Telegram WebApp initData validation (HMAC-SHA256) ---
@@ -119,6 +123,19 @@ def couple_id_for(user_id: int) -> Optional[str]:
     return f"{a}_{b}"
 
 
+def _partner_of(user_id: int) -> str:
+    """Имя второго партнёра (не текущего пользователя)."""
+    if user_id == config.PARTNER_A_ID and config.PARTNER_B_ID:
+        return config.PARTNER_B_NAME
+    if user_id == config.PARTNER_B_ID and config.PARTNER_A_ID:
+        return config.PARTNER_A_NAME
+    if config.PARTNER_B_ID and user_id != config.PARTNER_B_ID:
+        return config.PARTNER_B_NAME
+    if config.PARTNER_A_ID and user_id != config.PARTNER_A_ID:
+        return config.PARTNER_A_NAME
+    return ""
+
+
 def require_partner(user_id: int) -> None:
     if user_id not in config.allowed_user_ids():
         raise HTTPException(status_code=403, detail="Доступ только для пары Шёпота")
@@ -149,6 +166,7 @@ async def auth_from_header(
     return info
 
 
+@app.get("/health")
 @app.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "project": config.PROJECT_NAME}
@@ -226,19 +244,24 @@ async def api_profile(
             return {
                 "user_id": user_id,
                 "name": config.partner_name(user_id),
+                "partner_name": _partner_of(user_id),
                 "is_completed": False,
                 "ai_summary": None,
                 "blocked_topics": [],
+                "blocked_labels": [],
                 "couple_id": couple_id_for(user_id),
+                "bot_username": "Familia_Quiz_bot",
             }
         blocked = parse_blocked_topics(profile.blocked_topics)
         return {
             "user_id": user_id,
             "name": (user.name if user else "") or config.partner_name(user_id),
+            "partner_name": _partner_of(user_id),
             "is_completed": bool(profile.is_completed),
             "ai_summary": profile.ai_summary,
             "blocked_topics": blocked,
             "blocked_labels": [config.mood_label(c) for c in blocked],
             "couple_id": couple_id_for(user_id),
+            "bot_username": "Familia_Quiz_bot",
             "updated_at": profile.updated_at.isoformat() + "Z" if profile.updated_at else None,
         }

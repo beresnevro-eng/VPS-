@@ -11,14 +11,16 @@ export no_proxy='*'
 echo "=== Останавливаю ВСЕ копии бота ==="
 # Важно: в ps путь часто просто ".venv/bin/python main.py" (без couple-quiz-bot)
 kill_bots() {
-  pgrep -f '/root/couple-quiz-bot/.venv/bin/python' 2>/dev/null || true
-  pgrep -f 'couple-quiz-bot/.venv/bin/python' 2>/dev/null || true
-  # процессы, у которых cwd = project (через /proc)
-  for pid in $(pgrep -f 'python.*main\.py' 2>/dev/null || true); do
-    cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)
-    if [[ "$cwd" == "/root/couple-quiz-bot" ]]; then
-      echo "$pid"
-    fi
+  # Только реальные python-процессы бота (не bash/cursorsandbox с текстом скрипта в cmdline)
+  for pid in $(pgrep -f '/root/couple-quiz-bot/\.venv/bin/python' 2>/dev/null || true); do
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+    case "$cmd" in
+      *cursorsandbox*|*bash\ -*|*bash\ /tmp*) continue ;;
+    esac
+    # cmdline должен начинаться с python интерпретатора проекта
+    case "$cmd" in
+      /root/couple-quiz-bot/.venv/bin/python*) echo "$pid" ;;
+    esac
   done
 }
 
@@ -75,6 +77,17 @@ fi
 if ! grep -q '^GROQ_MODEL_FALLBACKS=' .env 2>/dev/null; then
   echo 'GROQ_MODEL_FALLBACKS=openai/gpt-oss-120b,qwen/qwen3.6-27b' >> .env
 fi
+
+# Освобождаем порт Mini App API (часто занят мёртвым uvicorn / старым туннелем)
+API_PORT="${API_PORT:-8080}"
+echo "=== Освобождаю порт ${API_PORT} ==="
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k "${API_PORT}/tcp" 2>/dev/null || true
+fi
+for pid in $(ss -lntp 2>/dev/null | awk -v p=":${API_PORT}" '$4 ~ p {print}' | grep -oP 'pid=\K[0-9]+' || true); do
+  kill -9 "$pid" 2>/dev/null || true
+done
+sleep 1
 
 : > bot.log
 nohup env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \

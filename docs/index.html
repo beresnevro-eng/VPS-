@@ -13,6 +13,7 @@
       <p class="eyebrow">Шёпот</p>
       <h1 id="greeting">Загрузка…</h1>
       <p class="sub" id="subtitle">Люм готовит пространство для вашей пары</p>
+      <p class="pair" id="pair-line" hidden></p>
     </header>
 
     <section class="card" id="status-card">
@@ -20,10 +21,18 @@
       <p id="status-text">Подключаюсь к API…</p>
     </section>
 
+    <section class="card" id="onboarding-card" hidden>
+      <h2>Анкета</h2>
+      <p class="muted">Портрет ещё не собран. Заполните анкету в боте — Люм соберёт ваш профиль.</p>
+      <a class="btn" id="onboarding-link" href="https://t.me/Familia_Quiz_bot?start=onboarding" target="_blank" rel="noopener">
+        Открыть бота и заполнить анкету
+      </a>
+    </section>
+
     <section class="card" id="profile-card" hidden>
       <h2>Портрет</h2>
       <p id="profile-summary" class="summary"></p>
-      <p id="blocked-topics" class="muted"></p>
+      <div id="blocked-badges" class="badges" hidden></div>
     </section>
 
     <section class="card" id="history-card" hidden>
