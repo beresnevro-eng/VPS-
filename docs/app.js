@@ -7,8 +7,8 @@ window.SHEPOT_API_BASE =
 const API_BASE = String(window.SHEPOT_API_BASE).replace(/\/$/, "");
 const BOT_URL = "https://t.me/Familia_Quiz_bot";
 
-const tg = window.Telegram?.WebApp;
 const $ = (id) => document.getElementById(id);
+const getTg = () => window.Telegram?.WebApp || null;
 
 const state = {
   tab: "home",
@@ -19,6 +19,7 @@ const state = {
   moods: [],
   portraitWho: "me",
   starting: false,
+  initData: "",
 };
 
 function escapeHtml(s) {
@@ -46,7 +47,7 @@ async function apiFetch(path, options = {}) {
     "Content-Type": "application/json",
     ...(options.headers || {}),
   };
-  const initData = options.initData ?? tg?.initData ?? "";
+  const initData = options.initData ?? state.initData ?? getTg()?.initData ?? "";
   if (initData) headers["X-Telegram-Init-Data"] = initData;
 
   const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
@@ -175,6 +176,95 @@ function renderHistory(quizzes) {
   }
 }
 
+function showBootError(title, text) {
+  $("greeting").textContent = title;
+  $("home-sub").textContent = "Люм рядом";
+  const sk = document.querySelector("#home-status-card [data-sk]");
+  if (sk) sk.hidden = true;
+  $("home-status").hidden = false;
+  $("home-status").textContent = text;
+  $("cta-retry").hidden = false;
+  $("cta-start").hidden = true;
+  $("cta-answer").hidden = true;
+  $("cta-waiting").hidden = true;
+  $("history-empty").hidden = false;
+  $("home-empty").hidden = true;
+}
+
+async function waitForInitData(timeoutMs = 5000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const w = getTg();
+    if (w) {
+      try {
+        w.ready();
+        w.expand?.();
+      } catch (_) {
+        /* ignore */
+      }
+      if (w.initData && w.initData.length > 20) return w.initData;
+    }
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  return getTg()?.initData || "";
+}
+
+async function bootSession() {
+  const w = getTg();
+  if (w) {
+    try {
+      w.ready();
+      w.expand();
+      w.setHeaderColor?.("#14181f");
+      w.setBackgroundColor?.("#14181f");
+    } catch (_) {
+      /* older clients */
+    }
+  }
+
+  $("greeting").textContent = "Загрузка…";
+  $("cta-retry").hidden = true;
+  const sk = document.querySelector("#home-status-card [data-sk]");
+  if (sk) sk.hidden = false;
+  $("home-status").hidden = true;
+
+  if (!getTg()) {
+    showBootError(
+      "Нет Telegram SDK",
+      "Страница открыта вне WebApp. Нажмите «🌿 Открыть Шёпот» в чате с ботом."
+    );
+    return;
+  }
+
+  const initData = await waitForInitData(5000);
+  state.initData = initData;
+  if (!initData) {
+    const unsafe = getTg()?.initDataUnsafe;
+    console.warn("[Shepot] empty initData", {
+      platform: getTg()?.platform,
+      version: getTg()?.version,
+      unsafeUser: unsafe?.user?.id,
+    });
+    showBootError(
+      "Сессия не получена",
+      "Закройте Mini App и снова нажмите «🌿 Открыть Шёпот» в боте (не через браузер)."
+    );
+    return;
+  }
+
+  try {
+    state.auth = await apiFetch("/api/auth", {
+      method: "POST",
+      body: { initData },
+    });
+    await refreshAll();
+    $("cta-retry").hidden = true;
+  } catch (err) {
+    console.error("[Shepot]", err);
+    showBootError("Не удалось загрузить данные", String(err.message || err));
+  }
+}
+
 function renderPortrait() {
   const me = state.profile;
   if (!me) return;
@@ -277,7 +367,7 @@ async function startQuiz(moodCode) {
     // Автозакрытие Mini App → пользователь видит вопрос в чате
     setTimeout(() => {
       try {
-        tg?.close?.();
+        getTg()?.close?.();
       } catch (_) {
         /* ignore */
       }
@@ -366,6 +456,8 @@ function bindUi() {
 
   $("cta-start")?.addEventListener("click", openMoodSheet);
   $("cta-start-empty")?.addEventListener("click", openMoodSheet);
+  $("cta-retry")?.addEventListener("click", () => bootSession());
+
   document.querySelectorAll("[data-go-home]").forEach((b) =>
     b.addEventListener("click", () => {
       setTab("home");
@@ -428,42 +520,11 @@ function bindUi() {
 }
 
 async function main() {
-  if (tg) {
-    tg.ready();
-    tg.expand();
-    try {
-      tg.setHeaderColor?.("#14181f");
-      tg.setBackgroundColor?.("#14181f");
-    } catch (_) {
-      /* older clients */
-    }
-  }
-
   bindUi();
   setTab("home");
-
-  const initData = tg?.initData || "";
-  if (!initData) {
-    $("greeting").textContent = "Откройте из Telegram";
-    $("home-status").hidden = false;
-    $("home-status").textContent = "Mini App работает только через бота «Шёпот».";
-    document.querySelector("#home-status-card [data-sk]")?.setAttribute("hidden", "");
-    return;
-  }
-
-  try {
-    state.auth = await apiFetch("/api/auth", {
-      method: "POST",
-      body: { initData },
-    });
-    await refreshAll();
-  } catch (err) {
-    console.error("[Shepot]", err);
-    $("greeting").textContent = "Не удалось войти";
-    $("home-status").hidden = false;
-    $("home-status").textContent = String(err.message || err);
-    document.querySelector("#home-status-card [data-sk]")?.setAttribute("hidden", "");
-  }
+  // Пока грузимся — пустые состояния не оставляем «чёрным экраном»
+  $("history-empty").hidden = false;
+  await bootSession();
 }
 
 main();

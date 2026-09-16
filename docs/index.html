@@ -6,6 +6,9 @@
   <title>Шёпот — Люм</title>
   <link rel="stylesheet" href="./style.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    try { window.Telegram?.WebApp?.ready(); } catch (e) {}
+  </script>
 </head>
 <body>
   <div id="app" class="app">
@@ -27,6 +30,7 @@
       <div class="card status-card" id="home-status-card">
         <div class="skeleton sk-line" data-sk></div>
         <p class="status-text" id="home-status" hidden></p>
+        <button type="button" class="cta cta-secondary" id="cta-retry" hidden>Повторить вход</button>
         <button type="button" class="cta cta-primary" id="cta-start" hidden>Хочу обсудить сейчас</button>
         <a class="cta cta-secondary" id="cta-answer" hidden href="https://t.me/Familia_Quiz_bot" target="_blank" rel="noopener">Ответить в боте</a>
         <p class="cta-waiting" id="cta-waiting" hidden>
@@ -144,6 +148,6 @@
       </button>
     </nav>
   </div>
-  <script src="./app.js"></script>
+  <script src="./app.js?v=20260916b"></script>
 </body>
 </html>
