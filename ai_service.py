@@ -103,8 +103,24 @@ def _brevity_instruction() -> str:
     )
 
 
-def voice_system_preamble() -> str:
+def voice_system_preamble(gender_hint_for: int | None = None) -> str:
     """Строгая инструкция голоса Люма для всех системных промптов (MANIFESTO)."""
+    gender_line = ""
+    if gender_hint_for is not None:
+        try:
+            from gender_utils import ai_gender_instruction
+
+            gender_line = " " + ai_gender_instruction(gender_hint_for)
+        except Exception:
+            gender_line = (
+                " Обращайся к пользователю в подходящем роде, если это применимо. "
+                "Если род не указан — используй нейтральные формы."
+            )
+    else:
+        gender_line = (
+            " Обращайся к пользователю в подходящем роде, если это применимо. "
+            "Если род не указан — используй нейтральные формы."
+        )
     return (
         f"Ты — {config.ASSISTANT_NAME}, мудрый и эмпатичный AI-помощник проекта "
         f"«{config.PROJECT_NAME}». "
@@ -117,6 +133,7 @@ def voice_system_preamble() -> str:
         f"Подписывай ответы от лица {config.ASSISTANT_NAME} "
         "(например: «Я, Люм, заметил…»), а не безликого ассистента. "
         "Не используй слова «проблема», «диагноз», «разбор». "
+        f"{gender_line} "
         f"{_brevity_instruction()}"
     )
 
@@ -369,10 +386,12 @@ def _normalize_questions(arr: list[Any]) -> list[dict[str, Any]]:
 async def generate_questions(
     topic: str | None = None,
     blocked_topics: list | None = None,
+    hidden_question: str | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """
     Генерирует 5 вопросов для пары (4 multiple_choice + 1 open_ended).
     blocked_topics — коды тем (routine, fun, …), которые нельзя трогать.
+    hidden_question — приватная тема от партнёра (включить нейтрально, без раскрытия автора).
     Возвращает (тема, список объектов-вопросов).
     """
     blocked = [str(c).strip() for c in (blocked_topics or []) if str(c).strip()]
@@ -397,10 +416,26 @@ async def generate_questions(
             "с текущим настроением. "
         )
 
+    hidden_raw = (hidden_question or "").strip()
+    hidden_block = ""
+    if hidden_raw:
+        hidden_block = (
+            f"Один из вопросов должен быть на тему: '{hidden_raw}'. "
+            "Сформулируй его нейтрально, как обычный вопрос от психолога. "
+            "НИКОГДА не упоминай, что кто-то его просил. "
+            "НИКОГДА не используй имена партнёров в контексте просьбы. "
+            "Никогда не упоминай автора запроса. "
+            "Никогда не используй фразы «кто-то хочет узнать», «тебя просили спросить», "
+            "«один из вас попросил». Вопрос должен звучать как обычный вопрос от Люма — "
+            "будто ты сам решил его задать. "
+            "Сохрани тип: preferably multiple_choice с 4 вариантами, либо open_ended. "
+        )
+
     system_prompt = (
         f"{voice_system_preamble()} "
         "Сгенерируй ровно 5 вопросов для пары на заданную тему. "
         f"{forbid}"
+        f"{hidden_block}"
         "Требование: 4 вопроса type=multiple_choice (по 4 эмпатичных варианта ответа) "
         "и 1 вопрос type=open_ended (без options). "
         "Варианты ответов — реалистичные, без стыда и осуждения. "
@@ -413,6 +448,11 @@ async def generate_questions(
         f"Тема: {topic}. "
         "Все тексты на русском. Только JSON. "
         f"Не затрагивай заблокированные темы: {blocked_txt}."
+        + (
+            f" Обязательно включи нейтральный вопрос по теме «{hidden_raw}»."
+            if hidden_raw
+            else ""
+        )
     )
 
     try:
@@ -425,10 +465,35 @@ async def generate_questions(
             max_tokens=1800,
         )
         questions = _normalize_questions(_extract_json_array(raw))
+        if hidden_raw and questions:
+            # Подстраховка: пометим один вопрос конструктом (без утечки автора)
+            q0 = questions[min(1, len(questions) - 1)]
+            if not q0.get("psychological_construct"):
+                q0["psychological_construct"] = "Близость"
         return topic, questions
     except Exception as exc:
         logger.warning("AI генерация вопросов не удалась: %s — fallback", exc)
-        return topic, [dict(q) for q in _FALLBACK_QUESTIONS]
+        questions = [dict(q) for q in _FALLBACK_QUESTIONS]
+        if hidden_raw and questions:
+            # Fallback: заменяем один вопрос нейтральной формулировкой
+            theme = hidden_raw
+            if theme.lower().startswith("про "):
+                theme = theme[4:].strip()
+            questions[1] = {
+                "question": (
+                    f"Когда вы в последний раз чувствовали {theme} в паре? "
+                    "Что это был за момент?"
+                ),
+                "type": "multiple_choice",
+                "options": [
+                    "Недавно — и это было тепло",
+                    "Давно, но помню ясно",
+                    "Сложно вспомнить",
+                    "Хочу больше таких моментов",
+                ],
+                "psychological_construct": "Близость",
+            }
+        return topic, questions
 
 
 async def analyze_couple_answers(payload: dict) -> str:
@@ -480,33 +545,326 @@ async def analyze_couple_answers(payload: dict) -> str:
         )
 
 
-async def discuss_with_psychologist(user_message: str, quiz_context: str = "") -> str:
-    """Короткий ответ Люма в режиме «Обсудить»."""
+async def discuss_with_psychologist(
+    user_message: str,
+    quiz_context: str = "",
+    *,
+    name: str = "",
+    topic: str = "",
+    analysis: str = "",
+    history: list[dict[str, str]] | None = None,
+) -> str:
+    """
+    Диалоговый ответ Люма с памятью истории.
+    history: [{role: user|lum, text: ...}, ...]
+    """
+    name_s = (name or "друг").strip() or "друг"
+    topic_s = (topic or "ваш квиз").strip()
+    analysis_s = (analysis or quiz_context or "").strip()[:1800]
+    hist_lines: list[str] = []
+    for m in (history or [])[-15]:
+        role = (m.get("role") or "").strip()
+        text = (m.get("text") or "").strip()
+        if not text:
+            continue
+        who = "Люм" if role == "lum" else name_s
+        hist_lines.append(f"{who}: {text[:500]}")
+    hist_block = "\n".join(hist_lines) if hist_lines else "(начало разговора)"
+
     system = (
         f"{voice_system_preamble()} "
-        "Отвечай коротко (до 120 слов), по-русски. "
-        "Помогай паре мягко уточнять чувства и договариваться. "
-        "В конце задай один открытый вопрос."
+        f"Ты — Люм, мудрый семейный психолог. Ты обсуждаешь с {name_s} квиз на тему «{topic_s}». "
+        "Твоя задача — не давать советы, а помогать разобраться. "
+        "Задай один уточняющий вопрос, который углубит разговор. "
+        "Не повторяй то, что уже сказал раньше. "
+        "Будь тёплым, но не слащавым. "
+        "Ответ — максимум 3 предложения. Не пиши простыни. Один уточняющий вопрос в конце. "
+        "Если разговор зашёл в тупик — предложи мягко сменить угол: «А как это связано с…?» "
+        "Если пользователь поднимает серьёзные темы — депрессия, тревога, абьюз, суицидальные мысли — "
+        "мягко напомни: «Это серьёзные вещи, я не заменяю специалиста. Подумай о консультации с психологом.» "
+        "Не пытайся терапевтировать сам. "
+        "Верни СТРОГО текст ответа. Без префиксов, без «Люм:»."
     )
     user = (
-        f"Контекст квиза:\n{quiz_context[:1500]}\n\n"
-        f"Сообщение партнёра: {user_message}"
+        f"Контекст квиза / разбор:\n{analysis_s or 'пока мало данных'}\n\n"
+        f"История вашего диалога:\n{hist_block}\n\n"
+        f"Пользователь только что написал: {(user_message or '').strip()[:1500]}"
     )
     try:
         text = await _chat(
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.6,
-            max_tokens=500,
+            temperature=0.65,
+            max_tokens=350,
         )
-        return as_lumen(with_open_question(text))
+        cleaned = (text or "").strip()
+        for prefix in ("Люм:", "Lumen:", "Ассистент:"):
+            if cleaned.startswith(prefix):
+                cleaned = cleaned[len(prefix) :].strip()
+        # жёстко обрежем «простыню» до ~3 предложений по возможности
+        return as_lumen(cleaned[:1200] if cleaned else "")
     except Exception:
         logger.exception("discuss failed")
         return as_lumen(
-            with_open_question(
-                "Сейчас связь чуть капризничает. "
-                "Попробуйте сказать партнёру одной фразой: «Мне важно, чтобы…»."
-            )
+            "Сейчас связь чуть капризничает. "
+            "Скажи одной фразой, что тебя больше всего задело в этом квизе — "
+            "я попробую ещё раз."
         )
+
+
+DAILY_DISCUSSION_LIMIT_MSG = (
+    "🌿 Мы сегодня много обсудили. Давай сделаем паузу — вернёмся к этому завтра. "
+    "Напиши /done, чтобы закрыть разговор."
+)
+
+
+async def generate_weekly_digest(
+    quizzes: list[dict[str, Any]],
+    profiles: dict[str, Any],
+    notes_a: list[str] | None = None,
+    notes_b: list[str] | None = None,
+) -> dict[str, Any] | None:
+    """
+    AI-дайджест недели.
+
+    quizzes: [{date, topic, questions, answers_a, answers_b, analysis, temperature_score}, ...]
+    profiles: {"A": {"name", "ai_summary_public"}, "B": {...}}
+    notes_a / notes_b: приватные заметки партнёров (контекст, не цитировать).
+    Returns: {pattern, pattern_short, actions} или None при ошибке.
+    """
+    compact_quizzes = []
+    for q in (quizzes or [])[:14]:
+        compact_quizzes.append(
+            {
+                "date": q.get("date"),
+                "topic": q.get("topic"),
+                "temperature_score": q.get("temperature_score"),
+                "analysis": (str(q.get("analysis") or ""))[:500],
+                "answers_a": q.get("answers_a"),
+                "answers_b": q.get("answers_b"),
+            }
+        )
+
+    name_a = str((profiles or {}).get("A", {}).get("name") or "A").strip() or "A"
+    name_b = str((profiles or {}).get("B", {}).get("name") or "B").strip() or "B"
+    na = [str(x).strip()[:400] for x in (notes_a or []) if str(x).strip()][:20]
+    nb = [str(x).strip()[:400] for x in (notes_b or []) if str(x).strip()][:20]
+
+    system = (
+        f"{voice_system_preamble()} "
+        "Ты — Люм, мудрый семейный психолог. "
+        "Найди ОДИН главный паттерн недели — то, что повторяется: тема, эмоция, динамика. "
+        "Предложи 3 конкретных действия на следующую неделю — маленьких, реализуемых, тёплых. "
+        "Избегай общих советов вроде «больше общайтесь». Будь конкретным: "
+        "«Выделите 15 минут в среду без телефонов». "
+        "Тон — поддерживающий, без осуждения. Обращайся к паре на «вы». "
+        f"В ответах партнёры обозначены как A (это {name_a}) и B (это {name_b}). "
+        f"В тексте паттерна и действий ВСЕГДА используй их реальные имена — {name_a} и {name_b}, "
+        "а не «Партнёр 1» и «Партнёр 2». Не используй абстракции. "
+        "Личные заметки — только КОНТЕКСТ: НИКОГДА не цитируй дословно и не раскрывай "
+        "партнёру то, что написал только один из них. "
+        "Верни СТРОГО JSON без markdown:\n"
+        '{"pattern":"2-3 предложения","pattern_short":"до 120 символов","actions":["...","...","..."]}'
+    )
+    notes_block = (
+        "Личные заметки партнёров за неделю. Учитывай их как КОНТЕКСТ при поиске паттернов. "
+        "НИКОГДА не цитируй дословно и не раскрывай партнёру то, что написал только один из них.\n"
+        f"Заметки A ({name_a}): {json.dumps(na, ensure_ascii=False)}\n"
+        f"Заметки B ({name_b}): {json.dumps(nb, ensure_ascii=False)}\n\n"
+    )
+    user = (
+        f"Квизы пары за неделю:\n{json.dumps(compact_quizzes, ensure_ascii=False)[:4500]}\n\n"
+        f"Портреты партнёров:\n{json.dumps(profiles or {}, ensure_ascii=False)[:1500]}\n\n"
+        f"{notes_block}"
+    )
+
+    try:
+        raw = await _chat(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.55,
+            max_tokens=900,
+        )
+        data = _extract_json_dict(raw)
+        if not data:
+            logger.error("generate_weekly_digest: invalid JSON: %s", (raw or "")[:400])
+            return None
+        pattern = str(data.get("pattern") or "").strip()
+        pattern_short = str(data.get("pattern_short") or "").strip()[:120]
+        actions_raw = data.get("actions") or []
+        actions: list[str] = []
+        if isinstance(actions_raw, list):
+            actions = [str(a).strip() for a in actions_raw if str(a).strip()][:3]
+        while len(actions) < 3:
+            actions.append("Мягкий вечерний check-in: «Как ты сегодня?»")
+        if not pattern:
+            logger.error("generate_weekly_digest: empty pattern")
+            return None
+        if not pattern_short:
+            pattern_short = pattern[:117] + ("…" if len(pattern) > 117 else "")
+        return {
+            "pattern": pattern,
+            "pattern_short": pattern_short,
+            "actions": actions,
+        }
+    except Exception:
+        logger.exception("generate_weekly_digest failed")
+        return None
+
+
+def _extract_json_dict(raw: str | None) -> dict[str, Any] | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text, re.IGNORECASE)
+    if fence:
+        text = fence.group(1).strip()
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    start, end = text.find("{"), text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            data = json.loads(text[start : end + 1])
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            return None
+    return None
+
+
+def _extract_json_list(raw: str | None) -> list[Any] | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text, re.IGNORECASE)
+    if fence:
+        text = fence.group(1).strip()
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and isinstance(data.get("ideas"), list):
+            return data["ideas"]
+    except Exception:
+        pass
+    start, end = text.find("["), text.rfind("]")
+    if start >= 0 and end > start:
+        try:
+            data = json.loads(text[start : end + 1])
+            if isinstance(data, list):
+                return data
+        except Exception:
+            return None
+    return None
+
+
+_DATE_IDEA_CATEGORIES = frozenset(
+    {"romance", "adventure", "cozy", "deep_talk", "fun"}
+)
+
+
+async def generate_date_ideas(
+    profiles: dict[str, Any],
+    recent_digest: dict[str, Any],
+    blocked_topics: list[str],
+    done_ideas_titles: list[str] | None = None,
+    notes_a: list[str] | None = None,
+    notes_b: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    3 персональные идеи для свиданий.
+    Returns list of {title, description, category, duration_hint, budget_hint}.
+    """
+    name_a = str((profiles or {}).get("A", {}).get("name") or "A").strip() or "A"
+    name_b = str((profiles or {}).get("B", {}).get("name") or "B").strip() or "B"
+    pattern = str((recent_digest or {}).get("pattern") or "").strip()
+    blocked = [str(x) for x in (blocked_topics or []) if x]
+    done_titles = [str(t).strip() for t in (done_ideas_titles or []) if str(t).strip()][:30]
+    na = [str(x).strip()[:400] for x in (notes_a or []) if str(x).strip()][:20]
+    nb = [str(x).strip()[:400] for x in (notes_b or []) if str(x).strip()][:20]
+
+    system = (
+        f"{voice_system_preamble()} "
+        "Ты — Люм, мудрый помощник пары. Предложи 3 ИДЕИ ДЛЯ СВИДАНИЙ. "
+        "Правила: идеи КОНКРЕТНЫЕ — не «проведите время вместе», а "
+        "«приготовьте вместе ужин из блюда, которое оба не пробовали». "
+        "Учитывай паттерн: если языки любви не совпадают, предложи активности, "
+        "которые закрывают обе потребности. "
+        "Разнообразие: одна романтическая, одна приключенческая, одна уютная. "
+        "Бюджет реалистично: 0₽ (прогулка), до 1000₽ (кино+ужин), 1000₽+ (поездка). "
+        f"В ответах партнёры — {name_a} и {name_b}; используй их имена, не «Партнёр 1/2». "
+        "Личные заметки — только КОНТЕКСТ: НИКОГДА не цитируй дословно и не раскрывай "
+        "партнёру содержание чужой заметки. "
+        "Верни СТРОГО JSON-массив из 3 объектов без markdown:\n"
+        '[{"title":"до 60 символов","description":"2-3 предложения",'
+        '"category":"romance|adventure|cozy|deep_talk|fun",'
+        '"duration_hint":"30 минут / вечер / выходные",'
+        '"budget_hint":"0₽ / до 1000₽ / 1000₽+"}]'
+    )
+    done_block = (
+        f"Вот идеи, которые пара уже реализовала: {json.dumps(done_titles, ensure_ascii=False)}.\n"
+        "НЕ предлагай их повторно. Вместо этого можешь предложить следующий шаг "
+        "в той же категории или вариацию.\n\n"
+        if done_titles
+        else ""
+    )
+    notes_block = (
+        "Личные заметки партнёров. Учитывай как КОНТЕКСТ. "
+        "НИКОГДА не цитируй дословно и не раскрывай партнёру то, что написал только один.\n"
+        f"Заметки A ({name_a}): {json.dumps(na, ensure_ascii=False)}\n"
+        f"Заметки B ({name_b}): {json.dumps(nb, ensure_ascii=False)}\n\n"
+    )
+    user = (
+        f"Портреты:\n{json.dumps(profiles or {}, ensure_ascii=False)[:1800]}\n\n"
+        f"Паттерн недели:\n{pattern[:1200] or 'пока мало данных — предложи универсальные тёплые идеи'}\n\n"
+        f"{done_block}{notes_block}"
+        f"Исключи темы (blocked): {json.dumps(blocked, ensure_ascii=False)}"
+    )
+
+    try:
+        raw = await _chat(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.65,
+            max_tokens=1100,
+        )
+        items = _extract_json_list(raw)
+        if not items:
+            logger.error("generate_date_ideas: invalid JSON: %s", (raw or "")[:400])
+            return []
+        out: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()[:200]
+            desc = str(item.get("description") or "").strip()[:1200]
+            cat = str(item.get("category") or "cozy").strip().lower()
+            if cat not in _DATE_IDEA_CATEGORIES:
+                cat = "cozy"
+            if not title or not desc:
+                continue
+            out.append(
+                {
+                    "title": title,
+                    "description": desc,
+                    "category": cat,
+                    "duration_hint": str(item.get("duration_hint") or "").strip()[:50] or None,
+                    "budget_hint": str(item.get("budget_hint") or "").strip()[:50] or None,
+                }
+            )
+            if len(out) >= 3:
+                break
+        return out
+    except Exception:
+        logger.exception("generate_date_ideas failed")
+        return []
 
 
 async def weekly_digest_text(summary_facts: str) -> str:
@@ -627,17 +985,20 @@ def _format_qa_block(
 async def generate_profile_summary(
     user_answers: dict,
     followup_answers: dict | None = None,
-) -> tuple[str, bool]:
+    *,
+    user_id: int | None = None,
+) -> tuple[str, str, str, bool]:
     """
-    Глубокий персонализированный портрет от Люма.
+    Глубокий портрет от Люма: public + private.
 
     Returns:
-        (text, ok) — ok=False при ошибке/таймауте API (портрет не готов).
+        (full_text, public, private, ok)
+        full_text — для бота / ai_summary (совместимость);
+        public/private — раздельные поля для Mini App.
     """
     followup_answers = followup_answers or {}
     base_answers = user_answers or {}
 
-    # Обрезка ответов до 100 символов — экономия токенов DeepSeek
     base_block = _format_qa_block(base_answers, answer_max_len=100)
     fu_block = _format_qa_block(followup_answers, answer_max_len=100)
 
@@ -649,41 +1010,33 @@ async def generate_profile_summary(
     )
     logger.info("generate_profile_summary DEBUG base_answers:\n%s", base_block[:3500])
     logger.info("generate_profile_summary DEBUG followup_answers:\n%s", fu_block[:2000])
-    print(
-        f"[Lumen DEBUG] provider={config.effective_ai_provider()} "
-        f"profile payload: base={len(base_answers)} followup={len(followup_answers)}",
-        flush=True,
-    )
-    print(f"[Lumen DEBUG] BASE:\n{base_block[:3000]}", flush=True)
-    print(f"[Lumen DEBUG] FOLLOWUP:\n{fu_block[:1500]}", flush=True)
 
     system = (
-        f"{voice_system_preamble()} "
+        f"{voice_system_preamble(gender_hint_for=user_id)} "
         "Проанализируй ответы пользователя на анкету и уточняющие вопросы. "
-        "Составь глубокий портрет (до 200 слов, лучше короче).\n"
-        "Внутренне оцени по 4 осям (в тексте осями не называй):\n"
-        "1) Ценности и приоритеты.\n"
-        "2) Эмоциональные потребности (любовь).\n"
-        "3) Стиль в конфликтах.\n"
-        "4) Близость и быт.\n"
-        "Структура ответа:\n"
-        "- Сильные стороны (2-3 предложения).\n"
-        "- Ключевая потребность в отношениях (1-2 предложения).\n"
-        "- Зона роста (мягко).\n"
-        "- Как партнёру лучше взаимодействовать с этим человеком.\n"
-        "Местоимение «ты». Подпись от Люма. "
-        "Если данных мало — предварительный портрет на основе того, что есть. "
-        "Никогда не пиши «не удалось собрать портрет»."
+        "Верни СТРОГО один JSON-объект (без markdown-ограждений) с полями:\n"
+        '{"public": "...", "private": "..."}\n'
+        "public (2–4 коротких абзаца, местоимение «ты»):\n"
+        "- сильные стороны;\n"
+        "- ключевая потребность в отношениях;\n"
+        "- что этот человек особенно ценит.\n"
+        "Это текст, который можно показать партнёру.\n"
+        "private (2–4 коротких абзаца, местоимение «ты»):\n"
+        "- зоны роста;\n"
+        "- уязвимости;\n"
+        "- что важно знать партнёру, но не стоит показывать сырым текстом.\n"
+        "Без подписи «Люм» внутри JSON. Без ключей кроме public и private. "
+        "Если данных мало — всё равно заполни оба поля по тому, что есть."
     )
     user = (
         f"Ответы на анкету (база):\n{base_block}\n\n"
         f"Уточняющие вопросы:\n{fu_block}\n\n"
-        "Составь портрет по структуре выше."
+        "Верни только JSON."
     )
 
     if not base_answers and not followup_answers:
         logger.warning("generate_profile_summary: пустые ответы — нечего анализировать")
-        return PROFILE_API_SOFT_FAIL, False
+        return PROFILE_API_SOFT_FAIL, "", "", False
 
     try:
         text = await _chat(
@@ -692,15 +1045,55 @@ async def generate_profile_summary(
                 {"role": "user", "content": user},
             ],
             temperature=0.5,
-            max_tokens=550,
+            max_tokens=700,
         )
-        if not text or len(text.strip()) < 40:
-            raise RuntimeError("AI вернул слишком короткий портрет")
-        low = text.lower()
-        if "не удалось собрать" in low:
-            raise RuntimeError(f"AI вернул отказной текст: {text[:120]}")
-        return as_lumen(with_open_question(text)), True
+        public, private = _parse_profile_public_private(text)
+        if len(public.strip()) < 20:
+            raise RuntimeError("AI вернул слишком короткий public-портрет")
+        full_body = public.strip()
+        if private.strip():
+            full_body = (
+                f"{public.strip()}\n\n"
+                f"—\n"
+                f"Только для тебя:\n{private.strip()}"
+            )
+        full = as_lumen(with_open_question(full_body))
+        return full, public.strip(), private.strip(), True
     except Exception as exc:
         logger.exception("profile summary failed: %s", exc)
         print(f"[Lumen DEBUG] profile AI ERROR: {exc}", flush=True)
-        return PROFILE_API_SOFT_FAIL, False
+        return PROFILE_API_SOFT_FAIL, "", "", False
+
+
+def _parse_profile_public_private(raw: str) -> tuple[str, str]:
+    """Достаёт public/private из ответа модели (JSON или fallback)."""
+    text = (raw or "").strip()
+    if not text:
+        return "", ""
+
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text, re.IGNORECASE)
+    if fence:
+        text = fence.group(1).strip()
+
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return str(data.get("public") or "").strip(), str(data.get("private") or "").strip()
+    except Exception:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            data = json.loads(text[start : end + 1])
+            if isinstance(data, dict):
+                return (
+                    str(data.get("public") or "").strip(),
+                    str(data.get("private") or "").strip(),
+                )
+        except Exception:
+            pass
+
+    logger.warning("profile summary: не удалось распарсить JSON, весь текст → public")
+    return text, ""

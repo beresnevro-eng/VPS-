@@ -37,7 +37,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="./style.css?v=20260916h" />
+  <link rel="stylesheet" href="./style.css?v=20260917n" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script>
     try { window.Telegram?.WebApp?.ready(); } catch (e) {}
@@ -57,114 +57,583 @@
 
     <!-- HOME -->
     <section class="tab-panel" data-tab="home" id="panel-home">
-      <div class="hero">
+      <div class="hero home-hero">
         <h1 id="greeting">Загрузка…</h1>
-        <p class="sub" id="home-sub">Люм рядом</p>
+        <p class="home-pair" id="home-pair" hidden>
+          <span class="home-pair-dot" aria-hidden="true"></span>
+          <span id="home-pair-text"></span>
+        </p>
+        <div class="hero-badges" id="hero-badges">
+          <p class="streak-badge" id="streak-badge" hidden></p>
+          <button type="button" class="note-quick-btn" id="home-note-btn" aria-label="Быстрая заметка">📝</button>
+        </div>
+        <p class="sub" id="home-sub" hidden>Люм рядом</p>
+      </div>
+
+      <div class="card digest-banner" id="digest-banner" hidden role="button" tabindex="0">
+        <p class="digest-banner-title">🌿 Твоя неделя в обзоре</p>
+        <p class="digest-banner-text" id="digest-banner-text"></p>
+        <span class="digest-banner-cta">Посмотреть 3 действия →</span>
       </div>
 
       <div class="card status-card" id="home-status-card">
         <div class="skeleton sk-line" data-sk></div>
-        <p class="status-text" id="home-status" hidden></p>
-        <button type="button" class="cta cta-secondary" id="cta-retry" hidden>Повторить вход</button>
-        <button type="button" class="cta cta-primary" id="cta-start" hidden>Хочу обсудить сейчас</button>
-        <a class="cta cta-secondary" id="cta-answer" hidden href="https://t.me/Familia_Quiz_bot" target="_blank" rel="noopener">Ответить в боте</a>
-        <p class="cta-waiting" id="cta-waiting" hidden>
-          <span class="pulse"></span>
-          <span id="cta-waiting-text">Ждём партнёра</span>
-        </p>
-      </div>
-
-      <div class="card" id="last-quiz-card" hidden>
-        <div class="card-head">
-          <h2>Последний квиз</h2>
-          <button type="button" class="linkish" id="last-quiz-open">Открыть</button>
+        <div id="home-status-body" hidden>
+          <p class="status-text" id="home-status"></p>
+          <p class="status-sub" id="home-status-sub" hidden></p>
+          <button type="button" class="cta cta-primary cta-gradient" id="cta-start" hidden>💬 Хочу обсудить сейчас</button>
+          <button type="button" class="cta cta-secondary" id="cta-answer" hidden>Ответить в боте</button>
+          <p class="cta-waiting" id="cta-waiting" hidden>
+            <span class="pulse"></span>
+            <span id="cta-waiting-text">Ждём ответ</span>
+          </p>
+          <p class="cta-analyzing" id="cta-analyzing" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Обычно занимает 10–20 секунд</span>
+          </p>
         </div>
-        <p class="topic" id="last-quiz-topic"></p>
-        <p class="date" id="last-quiz-date"></p>
-        <p class="analysis preview" id="last-quiz-analysis"></p>
-        <a class="btn-outline" id="last-quiz-discuss" href="#" target="_blank" rel="noopener">Обсудить в боте</a>
+        <button type="button" class="cta cta-secondary" id="cta-retry" hidden>Повторить вход</button>
       </div>
 
-      <div class="card empty" id="home-empty" hidden>
-        <p>Пока тишина. Начните первый разговор.</p>
-        <button type="button" class="cta cta-primary" id="cta-start-empty">Хочу обсудить сейчас</button>
+      <div class="card last-quiz-tap" id="last-quiz-card" role="button" tabindex="0">
+        <p class="topic" id="last-quiz-topic">Первый разговор впереди</p>
+        <p class="date" id="last-quiz-date"></p>
+        <p class="analysis preview" id="last-quiz-analysis">Начните с кнопки выше — Люм пришлёт вопросы в чат.</p>
       </div>
     </section>
 
     <!-- HISTORY -->
     <section class="tab-panel" data-tab="history" id="panel-history" hidden>
       <h1 class="panel-title">История</h1>
+      <div id="history-skeleton" class="history-skeleton" hidden>
+        <div class="skeleton sk-hist"></div>
+        <div class="skeleton sk-hist"></div>
+        <div class="skeleton sk-hist"></div>
+        <div class="skeleton sk-hist"></div>
+        <div class="skeleton sk-hist"></div>
+      </div>
       <ul class="quiz-list" id="history-list"></ul>
       <div class="card empty" id="history-empty" hidden>
-        <p>История появится после первого квиза.</p>
-        <button type="button" class="cta cta-primary" data-go-home>Начать первый</button>
+        <p>Пока тишина. Первый квиз появится после того, как вы оба ответите.</p>
+        <button type="button" class="cta cta-primary" data-go-home-only>На Главную</button>
       </div>
     </section>
 
     <!-- WE -->
     <section class="tab-panel" data-tab="we" id="panel-we" hidden>
       <h1 class="panel-title">Мы</h1>
-      <div class="segment" id="portrait-segment">
-        <button type="button" class="seg active" data-who="me">Я</button>
-        <button type="button" class="seg" data-who="partner">Партнёр</button>
+      <div class="segment" id="we-mode-segment" role="tablist" aria-label="Раздел Мы">
+        <button type="button" class="seg active" data-we-mode="portraits">Портреты</button>
+        <button type="button" class="seg" data-we-mode="dynamics">Динамика</button>
+        <button type="button" class="seg" data-we-mode="notes">Заметки</button>
+        <button type="button" class="seg" data-we-mode="hidden">Скрытые</button>
       </div>
-      <div class="card" id="portrait-card">
-        <h2 id="portrait-name">—</h2>
-        <p class="summary" id="portrait-summary"></p>
-        <a class="btn-outline" id="portrait-onboarding" href="https://t.me/Familia_Quiz_bot?start=onboarding" target="_blank" rel="noopener" hidden>
-          Заполнить анкету в боте
-        </a>
+
+      <div id="we-portraits">
+        <div class="card ob-we-banner" id="ob-we-banner" hidden role="region" aria-label="Онбординг">
+          <p class="ob-we-banner-title">Заверши анкету, чтобы Люм начал собирать твой портрет</p>
+          <button type="button" class="cta cta-primary" id="ob-we-continue">Продолжить онбординг</button>
+        </div>
+
+        <div class="segment" id="portrait-segment" role="tablist" aria-label="Чей портрет">
+          <button type="button" class="seg active" data-who="me">Я</button>
+          <button type="button" class="seg" data-who="partner">Партнёр</button>
+        </div>
+
+        <div class="card" id="portrait-card">
+          <div id="portrait-skeleton" class="portrait-skeleton" hidden>
+            <div class="skeleton sk-line" style="width:42%"></div>
+            <div class="skeleton sk-line" style="width:88%"></div>
+            <div class="skeleton sk-line" style="width:76%"></div>
+            <div class="skeleton sk-line" style="width:92%"></div>
+            <div class="skeleton sk-line" style="width:64%"></div>
+          </div>
+          <div id="portrait-body">
+            <div class="portrait-head">
+              <h2 id="portrait-name">—</h2>
+              <p class="date" id="portrait-updated"></p>
+            </div>
+            <span class="badge public-badge" id="portrait-public-badge" hidden>Публичная версия</span>
+            <p class="summary" id="portrait-summary"></p>
+            <p class="muted small" id="portrait-private-note" hidden></p>
+            <div class="portrait-empty" id="portrait-empty" hidden>
+              <p id="portrait-empty-text">Люм ещё не собрал твой портрет. Пройди анкету в боте.</p>
+              <a class="cta cta-secondary" id="portrait-open-bot" href="#" role="button">Открыть бота</a>
+            </div>
+            <a class="btn-outline" id="portrait-onboarding" href="#" role="button">
+              Продолжить онбординг
+            </a>
+          </div>
+        </div>
+
+        <div class="card" id="topics-card">
+          <h2>Темы для разговоров</h2>
+          <p class="muted small">Закрытые темы Люм не предлагает в квизах.</p>
+          <div id="topics-skeleton" class="topics-skeleton" hidden>
+            <div class="skeleton sk-chip"></div>
+            <div class="skeleton sk-chip"></div>
+            <div class="skeleton sk-chip"></div>
+            <div class="skeleton sk-chip"></div>
+            <div class="skeleton sk-chip"></div>
+            <div class="skeleton sk-chip"></div>
+          </div>
+          <div class="topics" id="topics-grid"></div>
+        </div>
       </div>
-      <div class="card">
-        <h2>Темы</h2>
-        <p class="muted small">Закрытые темы Люм не предлагает в квизах.</p>
-        <div class="topics" id="topics-grid"></div>
+
+      <div id="we-dynamics" hidden>
+        <div class="card dynamics-temp-card">
+          <div class="dynamics-head">
+            <h2>Температура отношений</h2>
+            <p class="muted small">За последние 30 дней</p>
+          </div>
+          <div class="temp-hero" id="temp-hero">
+            <span class="temp-value" id="temp-avg">—°</span>
+            <span class="temp-trend" id="temp-trend" aria-hidden="true"></span>
+            <span class="temp-delta muted" id="temp-delta"></span>
+          </div>
+          <div class="chart-wrap" id="temp-chart-wrap">
+            <canvas id="temp-chart" height="180" aria-label="График температуры"></canvas>
+          </div>
+          <p class="muted small dynamics-empty" id="temp-empty" hidden>
+            Нужно минимум 2 разобранных квиза. Продолжайте!
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>Карта тем</h2>
+          <div class="topic-heat" id="topic-heat"></div>
+          <p class="muted small dynamics-empty" id="topic-heat-empty" hidden>
+            Темы появятся после нескольких квизов
+          </p>
+        </div>
+
+        <p class="dynamics-disclaimer muted small">
+          🌿 Температура — это не приговор. Если показатель низкий, это просто повод поговорить, а не тревога.
+        </p>
+      </div>
+
+      <div id="we-notes" hidden>
+        <div class="notes-head">
+          <h2>📝 Мои заметки</h2>
+          <button type="button" class="notes-new-btn" id="notes-new-btn">+ Новая</button>
+        </div>
+        <div id="notes-list" class="notes-list"></div>
+        <button type="button" class="notes-show-all" id="notes-show-all" hidden>Показать все</button>
+        <div class="card empty notes-empty" id="notes-empty" hidden>
+          <p>🌿 Здесь ты можешь записать то, что зацепило. Люм учтёт это в следующих квизах.</p>
+          <p class="muted small">Заметки видишь только ты — партнёр их никогда не увидит.</p>
+          <button type="button" class="cta cta-primary" id="notes-empty-create">+ Создать первую заметку</button>
+        </div>
+      </div>
+
+      <div id="we-hidden" hidden>
+        <div class="hidden-q-head">
+          <div>
+            <h2>🤫 Скрытые вопросы</h2>
+            <p class="muted small hidden-q-sub">
+              Люм однажды задаст этот вопрос в квизе. Партнёр не узнает, что это от тебя.
+            </p>
+          </div>
+        </div>
+        <button type="button" class="cta cta-primary" id="hidden-q-new-btn">+ Задать скрытый вопрос</button>
+        <div id="hidden-q-list" class="hidden-q-list"></div>
+        <div class="card empty notes-empty" id="hidden-q-empty" hidden>
+          <p>🤫 Здесь ты можешь приватно попросить Люма поднять тему, которую сложно сказать вслух.</p>
+          <p class="muted small">Например: «про ревность», «про секс», «про распределение денег».</p>
+          <p class="muted small">Партнёр никогда не узнает, что это твоя просьба.</p>
+          <button type="button" class="cta cta-primary" id="hidden-q-empty-create">+ Задать скрытый вопрос</button>
+        </div>
       </div>
     </section>
 
     <!-- MORE -->
     <section class="tab-panel" data-tab="more" id="panel-more" hidden>
       <h1 class="panel-title">Ещё</h1>
-      <div class="card">
-        <h2>Идеи для свиданий</h2>
-        <p class="muted">Скоро — подборки от Люма под ваше настроение.</p>
+
+      <div class="card ideas-section" id="ideas-section">
+        <div class="ideas-head">
+          <h2>💡 Идеи для свиданий</h2>
+          <button type="button" class="ideas-refresh" id="ideas-refresh" aria-label="Обновить идеи">🔄</button>
+        </div>
+        <div id="ideas-skeleton" class="ideas-skeleton" hidden>
+          <div class="skeleton sk-idea"></div>
+          <div class="skeleton sk-idea"></div>
+          <div class="skeleton sk-idea"></div>
+        </div>
+        <div id="ideas-list" class="ideas-list"></div>
+        <div id="ideas-saved-wrap" hidden>
+          <h3 class="ideas-saved-title">❤️ Сохранённые</h3>
+          <div id="ideas-saved" class="ideas-list"></div>
+        </div>
+        <div id="ideas-done-wrap" hidden>
+          <button type="button" class="ideas-done-toggle" id="ideas-done-toggle" aria-expanded="false">
+            <span id="ideas-done-title">✅ Уже сделали · 0</span>
+            <span class="ideas-done-chevron">▾</span>
+          </button>
+          <div id="ideas-done" class="ideas-list" hidden></div>
+        </div>
+        <div id="ideas-empty" class="ideas-empty" hidden>
+          <p class="muted">Люм подготовит идеи после первой недели квизов. Продолжайте!</p>
+          <button type="button" class="cta cta-secondary" id="ideas-generate">Сгенерировать сейчас</button>
+        </div>
+      </div>
+
+      <div class="card digest-section" id="digest-section">
+        <h2>🌿 Неделя в обзоре</h2>
+        <div id="digest-latest" hidden>
+          <p class="digest-week-range" id="digest-week-range"></p>
+          <div class="digest-pattern-block">
+            <h3>Главный паттерн</h3>
+            <p class="summary" id="digest-pattern"></p>
+          </div>
+          <div class="digest-actions-block">
+            <h3>3 действия</h3>
+            <ul class="digest-actions" id="digest-actions"></ul>
+          </div>
+          <p class="muted small" id="digest-temp"></p>
+        </div>
+        <div id="digest-empty" class="digest-empty" hidden>
+          <span class="digest-empty-ico" aria-hidden="true">🌿</span>
+          <p class="muted">Первый дайджест появится в воскресенье вечером. Мы уже собираем данные.</p>
+        </div>
+      </div>
+
+      <div class="card" id="digest-history-card">
+        <h2>Прошлые недели</h2>
+        <ul class="digest-history" id="digest-history"></ul>
+        <p class="muted small" id="digest-history-empty" hidden>Пока нет прошлых недель.</p>
+      </div>
+
+      <div class="card more-soon" hidden>
+        <div class="more-card-head">
+          <h2>Идеи для свиданий</h2>
+          <span class="more-leaf" aria-hidden="true">🌿</span>
+        </div>
+        <p class="muted">
+          Люм уже собирает идеи на основе ваших ответов. Скоро здесь появятся персональные рекомендации.
+        </p>
         <span class="badge soon">Скоро</span>
       </div>
+
       <div class="card">
         <h2>Как работает Шёпот</h2>
-        <p class="summary small">
-          Бот присылает вопросы и пуши. Mini App — пульт: история, портреты, темы и внеочередной квиз.
-          Ответы всегда в чате с Люмом.
-        </p>
+        <ul class="more-how">
+          <li><span aria-hidden="true">🌿</span><span>Бот присылает квиз каждый день</span></li>
+          <li><span aria-hidden="true">💬</span><span>Отвечайте кнопками в чате</span></li>
+          <li><span aria-hidden="true">💡</span><span>Люм анализирует и находит паттерны</span></li>
+          <li><span aria-hidden="true">📊</span><span>История и портреты — в этом приложении</span></li>
+          <li><span aria-hidden="true">🔥</span><span>Серия — сколько дней подряд вы отвечаете на квизы</span></li>
+        </ul>
       </div>
+
       <div class="card">
-        <a class="cta cta-secondary" href="https://t.me/Familia_Quiz_bot" target="_blank" rel="noopener">Открыть бота</a>
+        <h2>Открыть бота</h2>
+        <button type="button" class="cta cta-secondary" id="more-open-bot">💬 Открыть чат с Люмом</button>
+      </div>
+
+      <div class="card">
+        <h2>Темы для разговоров</h2>
+        <button type="button" class="btn-outline" id="more-manage-topics">⚙️ Управлять темами</button>
+        <button type="button" class="btn-outline more-ob-reset" id="more-reset-onboarding">
+          Сбросить анкету
+        </button>
+      </div>
+
+      <div class="card notifications-card" id="notifications-card">
+        <h2>🔔 Напоминания</h2>
+        <div class="notif-row">
+          <div class="notif-row-text">
+            <p class="notif-label">Время квиза</p>
+            <p class="muted small" id="notif-hour-text">Люм ещё учится твоим привычкам. Ответь на несколько квизов.</p>
+          </div>
+          <button type="button" class="notif-edit-btn" id="notif-hour-edit">Изменить</button>
+        </div>
+        <div class="notif-row">
+          <div class="notif-row-text">
+            <p class="notif-label">Мягкие напоминания</p>
+            <p class="muted small">Если давно не общались</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="notif-reactivation" checked />
+            <span class="toggle-ui" aria-hidden="true"></span>
+          </label>
+        </div>
+        <div class="notif-row">
+          <div class="notif-row-text">
+            <p class="notif-label">Разбор готов</p>
+            <p class="muted small">Пуш, когда Люм закончил анализ</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="notif-analysis" checked />
+            <span class="toggle-ui" aria-hidden="true"></span>
+          </label>
+        </div>
+        <p class="muted small notif-tz-note">Время квиза показано в твоём часовом поясе.</p>
+      </div>
+
+      <footer class="more-footer">
+        <p>Шёпот · версия 0.1.0</p>
+        <p>Сделано с ❤️ для нас двоих</p>
+      </footer>
+    </section>
+
+    <!-- QUIZ DETAIL (fullscreen master-detail) -->
+    <section class="detail-view" id="quiz-detail-view" hidden>
+      <header class="detail-topbar">
+        <button type="button" class="detail-back" id="detail-back" aria-label="Назад">← Назад</button>
+        <div class="detail-top-center">
+          <h1 id="detail-title">Квиз</h1>
+          <p class="date" id="detail-date"></p>
+        </div>
+        <span class="detail-top-spacer" aria-hidden="true"></span>
+      </header>
+      <div id="detail-skeleton" class="detail-skeleton" hidden>
+        <div class="skeleton sk-hist"></div>
+        <div class="skeleton sk-hist"></div>
+        <div class="skeleton sk-card" style="height:140px"></div>
+      </div>
+      <div id="detail-content" class="detail-content">
+        <div class="card">
+          <h2>Вопросы</h2>
+          <div id="detail-accordion" class="accordion"></div>
+        </div>
+        <div class="card analysis-card">
+          <span class="analysis-leaf" aria-hidden="true">🌿</span>
+          <h2 id="detail-insight-title">💡 Наши инсайты</h2>
+          <p class="summary" id="detail-analysis"></p>
+        </div>
+
+        <div class="card discussion-card" id="discussion-card">
+          <h2>💬 Обсуждение</h2>
+          <div id="discussion-empty" class="discussion-empty">
+            <p class="muted small">Приватный разговор с Люмом — партнёр его не увидит.</p>
+            <button type="button" class="cta cta-primary" id="discussion-start-btn">Начать обсуждение</button>
+          </div>
+          <div id="discussion-chat" class="discussion-chat" hidden>
+            <div id="discussion-messages" class="discussion-messages"></div>
+            <div id="discussion-typing" class="discussion-typing" hidden>
+              <span></span><span></span><span></span>
+              <em>Люм печатает…</em>
+            </div>
+            <div class="discussion-compose">
+              <textarea
+                id="discussion-input"
+                class="discussion-input"
+                rows="2"
+                maxlength="2000"
+                placeholder="Напиши Люму…"
+              ></textarea>
+              <div class="discussion-compose-actions">
+                <button type="button" class="discussion-done-btn" id="discussion-done-btn" aria-label="Закрыть обсуждение">↩️</button>
+                <button type="button" class="cta cta-primary discussion-send-btn" id="discussion-send-btn">Отправить</button>
+              </div>
+            </div>
+          </div>
+          <a class="discussion-bot-link" id="detail-discuss" href="#" role="button">💬 Продолжить в боте</a>
+        </div>
+
+        <div class="detail-actions">
+          <button type="button" class="cta cta-secondary" id="detail-note-btn">📝 Заметка</button>
+        </div>
       </div>
     </section>
 
-    <!-- DETAIL SHEET -->
-    <div class="sheet" id="quiz-detail" hidden>
-      <div class="sheet-backdrop" data-close-detail></div>
-      <div class="sheet-panel">
+    <!-- TOPIC CONFIRM SHEET -->
+    <div class="sheet" id="topic-confirm" hidden>
+      <div class="sheet-backdrop" data-close-topic-confirm></div>
+      <div class="sheet-panel topic-confirm-panel">
         <div class="sheet-handle"></div>
-        <button type="button" class="sheet-close" data-close-detail aria-label="Закрыть">×</button>
-        <h2 id="detail-title">Квиз</h2>
-        <p class="date" id="detail-date"></p>
-        <div id="detail-body" class="detail-body"></div>
-        <a class="cta cta-primary" id="detail-discuss" href="#" target="_blank" rel="noopener">Обсудить в боте</a>
+        <h2 id="topic-confirm-title">Закрыть тему?</h2>
+        <p class="muted" id="topic-confirm-text">Люм больше не будет её спрашивать.</p>
+        <div class="confirm-actions">
+          <button type="button" class="cta cta-secondary" id="topic-confirm-cancel">Отмена</button>
+          <button type="button" class="cta cta-primary" id="topic-confirm-ok">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- IDEA ACTION SHEET -->
+    <div class="sheet" id="idea-action-sheet" hidden>
+      <div class="sheet-backdrop" data-close-idea-action></div>
+      <div class="sheet-panel idea-action-panel">
+        <div class="sheet-handle"></div>
+        <button type="button" class="idea-action-btn" id="idea-action-restore">↩️ Вернуть в идеи</button>
+        <button type="button" class="idea-action-btn idea-action-danger" id="idea-action-delete">🗑 Удалить полностью</button>
+        <button type="button" class="idea-action-btn idea-action-cancel" data-close-idea-action>Отмена</button>
+      </div>
+    </div>
+
+    <!-- IDEA DETAIL SHEET -->
+    <div class="sheet" id="idea-sheet" hidden>
+      <div class="sheet-backdrop" data-close-idea></div>
+      <div class="sheet-panel idea-sheet-panel">
+        <div class="sheet-handle"></div>
+        <div class="idea-sheet-top">
+          <span class="idea-cat" id="idea-sheet-cat"></span>
+          <span class="idea-duration muted" id="idea-sheet-duration"></span>
+        </div>
+        <h2 id="idea-sheet-title">Идея</h2>
+        <p class="idea-sheet-desc" id="idea-sheet-desc"></p>
+        <p class="idea-sheet-budget" id="idea-sheet-budget"></p>
+        <div class="idea-sheet-actions">
+          <button type="button" class="cta cta-primary" id="idea-sheet-save">❤️ Сохранить</button>
+          <button type="button" class="cta cta-secondary" data-close-idea>Закрыть</button>
+        </div>
       </div>
     </div>
 
     <!-- MOOD SHEET -->
     <div class="sheet" id="mood-sheet" hidden>
       <div class="sheet-backdrop" data-close-mood></div>
-      <div class="sheet-panel">
+      <div class="sheet-panel" id="mood-sheet-panel">
         <div class="sheet-handle"></div>
-        <button type="button" class="sheet-close" data-close-mood aria-label="Закрыть">×</button>
-        <h2>Какое настроение?</h2>
-        <p class="muted">Люм подберёт вопросы под выбранную тему.</p>
+        <h2>О чём хочешь поговорить?</h2>
         <div class="mood-grid" id="mood-grid"></div>
         <p class="error" id="mood-error" hidden></p>
+        <button type="button" class="cta cta-secondary sheet-cancel" data-close-mood>Отмена</button>
+      </div>
+    </div>
+
+    <!-- NOTE VIEW / EDIT SHEET -->
+    <div class="sheet" id="note-sheet" hidden>
+      <div class="sheet-backdrop" data-close-note></div>
+      <div class="sheet-panel note-sheet-panel">
+        <div class="sheet-handle"></div>
+        <div id="note-view-mode">
+          <p class="note-sheet-date muted small" id="note-sheet-date"></p>
+          <p class="note-sheet-badge" id="note-sheet-badge" hidden></p>
+          <p class="note-sheet-text" id="note-sheet-text"></p>
+          <div class="note-sheet-actions">
+            <button type="button" class="cta cta-secondary" id="note-edit-btn">✏️ Редактировать</button>
+            <button type="button" class="cta cta-secondary note-delete-cta" id="note-delete-btn">🗑 Удалить</button>
+          </div>
+        </div>
+        <div id="note-edit-mode" hidden>
+          <h2 id="note-form-title">Новая заметка</h2>
+          <textarea
+            id="note-textarea"
+            class="note-textarea"
+            rows="4"
+            maxlength="2000"
+            placeholder="Что тебя зацепило? Люм учтёт это в следующих квизах. Заметку видишь только ты."
+          ></textarea>
+          <label class="note-link-quiz" id="note-link-quiz-wrap">
+            <input type="checkbox" id="note-link-quiz" />
+            <span>Привязать к последнему разобранному квизу</span>
+          </label>
+          <div class="note-sheet-actions">
+            <button type="button" class="cta cta-secondary" data-close-note>Отмена</button>
+            <button type="button" class="cta cta-primary" id="note-save-btn" disabled>Сохранить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTE DELETE CONFIRM -->
+    <div class="sheet" id="note-delete-confirm" hidden>
+      <div class="sheet-backdrop" data-close-note-delete></div>
+      <div class="sheet-panel topic-confirm-panel">
+        <div class="sheet-handle"></div>
+        <h2>Удалить заметку?</h2>
+        <p class="muted">Она пропадёт навсегда.</p>
+        <div class="confirm-actions">
+          <button type="button" class="cta cta-secondary" data-close-note-delete>Отмена</button>
+          <button type="button" class="cta cta-primary note-delete-cta" id="note-delete-ok">Удалить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HIDDEN QUESTION CREATE SHEET -->
+    <div class="sheet" id="hidden-q-sheet" hidden>
+      <div class="sheet-backdrop" data-close-hidden-q></div>
+      <div class="sheet-panel note-sheet-panel">
+        <div class="sheet-handle"></div>
+        <h2>Скрытый вопрос</h2>
+        <textarea
+          id="hidden-q-textarea"
+          class="note-textarea hidden-q-textarea"
+          rows="3"
+          maxlength="200"
+          placeholder="Опиши тему или сам вопрос. Например: про нежность / что для тебя близость"
+        ></textarea>
+        <p class="muted small hidden-q-hint">
+          Люм переформулирует нейтрально — партнёр не поймёт, что это от тебя.
+        </p>
+        <div class="hidden-q-info">
+          🛡 Твой партнёр не увидит эту запись. Люм однажды включит тему в квиз, не упоминая тебя.
+        </div>
+        <div class="note-sheet-actions">
+          <button type="button" class="cta cta-secondary" data-close-hidden-q>Отмена</button>
+          <button type="button" class="cta cta-primary" id="hidden-q-save-btn" disabled>Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PREFERRED HOUR SHEET -->
+    <div class="sheet" id="notif-hour-sheet" hidden>
+      <div class="sheet-backdrop" data-close-notif-hour></div>
+      <div class="sheet-panel note-sheet-panel">
+        <div class="sheet-handle"></div>
+        <h2>Время квиза</h2>
+        <p class="muted small">Выбери час, когда тебе удобно получать вопросы.</p>
+        <label class="notif-hour-label" for="notif-hour-select">Час</label>
+        <select id="notif-hour-select" class="notif-hour-select"></select>
+        <p class="muted small" id="notif-hour-preview"></p>
+        <div class="note-sheet-actions">
+          <button type="button" class="cta cta-secondary" data-close-notif-hour>Отмена</button>
+          <button type="button" class="cta cta-primary" id="notif-hour-save">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ONBOARDING (full-screen, поверх табов) -->
+    <div id="onboarding-screen" class="onboarding-screen" hidden>
+      <header class="ob-top">
+        <p class="ob-brand">Шёпот</p>
+        <button type="button" class="ob-close" id="ob-close" aria-label="Закрыть">Закрыть</button>
+      </header>
+      <div class="ob-progress-wrap">
+        <p class="ob-progress-label" id="ob-progress-label">Шаг 1 из 18</p>
+        <div class="ob-progress-track" aria-hidden="true">
+          <div class="ob-progress-bar" id="ob-progress-bar"></div>
+        </div>
+      </div>
+
+      <div id="ob-question-view" class="ob-body">
+        <div id="ob-slide" class="ob-slide">
+          <h1 class="ob-question" id="ob-question-text"></h1>
+          <div class="ob-options" id="ob-options" hidden></div>
+          <div class="ob-open" id="ob-open" hidden>
+            <textarea
+              id="ob-textarea"
+              class="ob-textarea"
+              rows="4"
+              maxlength="2000"
+              placeholder="Ответь своими словами..."
+            ></textarea>
+            <div class="ob-open-actions">
+              <button type="button" class="cta cta-secondary" id="ob-skip">Пропустить</button>
+              <button type="button" class="cta cta-primary" id="ob-next" disabled>Дальше</button>
+            </div>
+          </div>
+        </div>
+        <p class="ob-status muted small" id="ob-status" hidden></p>
+        <div class="ob-nav">
+          <button type="button" class="ob-back" id="ob-back" hidden>← Назад</button>
+        </div>
+      </div>
+
+      <div id="ob-done-view" class="ob-done" hidden>
+        <p class="ob-done-emoji" aria-hidden="true">🌿</p>
+        <h1 class="ob-done-title">Портрет готов!</h1>
+        <p class="muted small ob-done-sub">Люм собрал твоё публичное отражение</p>
+        <div class="card ob-done-card">
+          <p class="summary" id="ob-done-summary"></p>
+        </div>
+        <button type="button" class="cta cta-primary cta-gradient" id="ob-continue">
+          Продолжить в Шёпот
+        </button>
       </div>
     </div>
 
@@ -183,6 +652,6 @@
       </button>
     </nav>
   </div>
-  <script src="./app.js?v=20260916h"></script>
+  <script src="./app.js?v=20260917n"></script>
 </body>
 </html>

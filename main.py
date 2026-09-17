@@ -123,9 +123,7 @@ async def main() -> None:
     scheduler = setup_scheduler(bot)
     scheduler.start()
     logging.info(
-        "Бот запущен. Квиз %02d:%02d, дайджест вс %02d:%02d (%s)",
-        config.QUIZ_HOUR,
-        config.QUIZ_MINUTE,
+        "Бот запущен. Квиз: hourly UTC :05 (adaptive), дайджест вс %02d:%02d (%s)",
         config.DIGEST_HOUR,
         config.DIGEST_MINUTE,
         config.TIMEZONE,

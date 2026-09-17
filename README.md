@@ -1,36 +1,42 @@
-# Couple Quiz Bot — MVP
+# Шёпот (Couple Quiz Bot)
 
-Лёгкий Telegram-бот для пары: ежедневный квиз + AI-разбор (Groq).
-Стек: Python 3.10+, aiogram 3, SQLite, APScheduler. Без Docker/Redis.
+Гибрид: Telegram-бот **Люм** + Mini App для пары.
 
-## Уже создано
+**Стек:** aiogram 3 · FastAPI · SQLite · DeepSeek/Groq · APScheduler
 
-| Файл | Назначение |
+## Документация
+
+| Файл | Содержание |
 |------|------------|
-| `config.py` | токены, ID партнёров, расписание, темы |
-| `database.py` | SQLite + модели User/Quiz/Question/Answer |
-| `ai_service.py` | Groq: генерация вопросов и анализ |
-| `requirements.txt` | зависимости |
+| [MANIFESTO.md](./MANIFESTO.md) | тон, этика, продукт |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | архитектура, API, схема БД |
+| [docs/CHANGELOG.md](./docs/CHANGELOG.md) | спринты v1–v2 |
+| [docs/BACKUP.md](./docs/BACKUP.md) | бэкап SQLite → Telegram |
 
-## Следующий шаг
-
-Нужны `handlers.py`, `scheduler.py`, `main.py` — скажи, и допишу.
-
-## Быстрый старт (после появления main.py)
+## Быстрый старт
 
 ```bash
 cd /root/couple-quiz-bot
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-export BOT_TOKEN="..."
-export GROQ_API_KEY="..."
-export PARTNER_A_ID=123
-export PARTNER_B_ID=456
-export PARTNER_A_NAME="Я"
-export PARTNER_B_NAME="Жена"
-export TIMEZONE="Europe/Moscow"
+cp .env.example .env
+# заполните BOT_TOKEN, PARTNER_*_ID, DEEPSEEK_API_KEY / GROQ_API_KEY
 
-python main.py
+bash start.sh   # или: python main.py
+```
+
+Секреты только в `.env`. Пример конфига: `config.example.py`.  
+Не коммитьте `.env`, `*.db`, `.cloudflared/`.
+
+## Mini App
+
+Статика в `docs/` (GitHub Pages). API — через Cloudflare Tunnel (`MINI_APP_URL` / `app.wspr.online`).
+
+## Бэкап и секреты
+
+```bash
+bash scripts/backup.sh              # дамп БД → Telegram → удалить с диска
+bash scripts/install-backup-cron.sh # cron 03:00
+bash scripts/export-secrets.sh      # .env + cloudflared → GPG → Telegram
 ```

@@ -1,6 +1,6 @@
 """
-Онбординг: 15 базовых вопросов + FSM-состояния.
-Ответы пишутся в SQLite через database.save_onboarding_answer (не копятся только в RAM).
+Онбординг: FSM-состояния бота + UI-хелперы.
+Базовые вопросы — в onboarding_questions.py (общие с Mini App API).
 """
 
 from __future__ import annotations
@@ -14,6 +14,15 @@ from aiogram.types import (
     KeyboardButton,
     ReplyKeyboardMarkup,
     WebAppInfo,
+)
+
+from onboarding_questions import (
+    BASE_QUESTIONS,
+    FOLLOWUP_COUNT,
+    TOTAL_STEPS,
+    base_total,
+    get_base_question,
+    total_steps,
 )
 
 
@@ -86,9 +95,18 @@ BTN_PROFILE = "👤 Мой профиль"
 BTN_DIGEST = "📊 Итоги недели"
 BTN_HELP = "❓ Помощь"
 BTN_MENU = "🏠 Меню"
+BTN_CANCEL = "✖️ Отмена"
 
 # WebApp-кнопка не шлёт текст в чат — в MENU_BUTTON_TEXTS её нет
-MENU_BUTTON_TEXTS = {BTN_QUIZ, BTN_STATUS, BTN_PROFILE, BTN_DIGEST, BTN_HELP, BTN_MENU}
+MENU_BUTTON_TEXTS = {
+    BTN_QUIZ,
+    BTN_STATUS,
+    BTN_PROFILE,
+    BTN_DIGEST,
+    BTN_HELP,
+    BTN_MENU,
+    BTN_CANCEL,
+}
 
 
 def main_menu_keyboard(user_id: int | None = None) -> ReplyKeyboardMarkup:
@@ -99,195 +117,12 @@ def main_menu_keyboard(user_id: int | None = None) -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_SHEPOT, web_app=web)],
             [KeyboardButton(text=BTN_QUIZ), KeyboardButton(text=BTN_STATUS)],
             [KeyboardButton(text=BTN_PROFILE), KeyboardButton(text=BTN_DIGEST)],
-            [KeyboardButton(text=BTN_HELP)],
+            [KeyboardButton(text=BTN_HELP), KeyboardButton(text=BTN_CANCEL)],
         ],
         resize_keyboard=True,
         is_persistent=True,
         input_field_placeholder="Выберите действие или ответьте на вопрос…",
     )
-
-
-# 15 базовых вопросов (inline или open)
-# category → поля профиля: values/love_language/attachment/conflict/intimacy/household
-BASE_QUESTIONS: list[dict[str, Any]] = [
-    {
-        "id": "v1",
-        "category": "values",
-        "type": "multiple_choice",
-        "text": "Что для вас важнее всего в отношениях прямо сейчас?",
-        "options": [
-            "Чувствовать себя в безопасности",
-            "Развиваться вместе",
-            "Сохранять страсть и игру",
-            "Спокойный быт и предсказуемость",
-        ],
-    },
-    {
-        "id": "v2",
-        "category": "values",
-        "type": "multiple_choice",
-        "text": "Какую ценность вы готовы отстаивать даже в споре с партнёром?",
-        "options": [
-            "Честность",
-            "Личное пространство",
-            "Семья / общие планы",
-            "Взаимное уважение границ",
-        ],
-    },
-    {
-        "id": "v3",
-        "category": "values",
-        "type": "open_ended",
-        "text": "Напишите одним предложением: что для вас значит «быть хорошим партнёром»?",
-        "options": [],
-    },
-    {
-        "id": "ll1",
-        "category": "love_language",
-        "type": "multiple_choice",
-        "text": "Как вы чаще всего чувствуете любовь партнёра?",
-        "options": [
-            "Слова поддержки и комплименты",
-            "Время вместе без отвлечений",
-            "Помощь и дела по дому",
-            "Прикосновения и нежность",
-        ],
-    },
-    {
-        "id": "ll2",
-        "category": "love_language",
-        "type": "multiple_choice",
-        "text": "Как вам естественнее проявлять заботу?",
-        "options": [
-            "Говорить тёплые слова",
-            "Делать практичные вещи",
-            "Дарить внимание и время",
-            "Обнимать / быть рядом физически",
-        ],
-    },
-    {
-        "id": "ll3",
-        "category": "love_language",
-        "type": "multiple_choice",
-        "text": "Что сильнее всего ранит, если партнёр этого не даёт?",
-        "options": [
-            "Молчание и холодные слова",
-            "Игнор совместного времени",
-            "Отказ помочь в быту",
-            "Нехватка телесной близости",
-        ],
-    },
-    {
-        "id": "a1",
-        "category": "attachment",
-        "type": "multiple_choice",
-        "text": "Когда партнёр отвечает не сразу, что вы чувствуете чаще?",
-        "options": [
-            "Спокойно жду",
-            "Немного тревожусь",
-            "Злюсь / закрываюсь",
-            "Начинаю проверять / писать ещё",
-        ],
-    },
-    {
-        "id": "a2",
-        "category": "attachment",
-        "type": "multiple_choice",
-        "text": "В близости вам обычно комфортнее…",
-        "options": [
-            "Быть очень близко и делиться всем",
-            "Баланс близости и своего пространства",
-            "Держать дистанцию, чтобы не ранить",
-            "То сближаться, то отдаляться",
-        ],
-    },
-    {
-        "id": "a3",
-        "category": "attachment",
-        "type": "open_ended",
-        "text": "Вспомните момент, когда вам было особенно важно, чтобы партнёр «был рядом». Что вам тогда было нужно?",
-        "options": [],
-    },
-    {
-        "id": "c1",
-        "category": "conflict",
-        "type": "multiple_choice",
-        "text": "Как вы обычно ведёте себя в конфликте?",
-        "options": [
-            "Говорю сразу и прямо",
-            "Нужна пауза, потом возвращаюсь",
-            "Избегаю эскалации, сглаживаю",
-            "Могу вспылить, потом жалею",
-        ],
-    },
-    {
-        "id": "c2",
-        "category": "conflict",
-        "type": "multiple_choice",
-        "text": "Что помогает вам быстрее помириться?",
-        "options": [
-            "Извинение и признание чувств",
-            "Практическое решение проблемы",
-            "Объятие / физический контакт",
-            "Время и тишина",
-        ],
-    },
-    {
-        "id": "h1",
-        "category": "household",
-        "type": "multiple_choice",
-        "text": "Как вы относитесь к домашним обязанностям?",
-        "options": [
-            "Чёткое разделение зон",
-            "Гибко, кто свободен — тот делает",
-            "Часто устаю от неравномерности",
-            "Предпочитаю делегировать / упрощать",
-        ],
-    },
-    {
-        "id": "h2",
-        "category": "household",
-        "type": "multiple_choice",
-        "text": "Что сильнее раздражает в быту?",
-        "options": [
-            "Беспорядок",
-            "Невыполненные договорённости",
-            "Критика моего способа делать",
-            "Ощущение, что всё на мне",
-        ],
-    },
-    {
-        "id": "i1",
-        "category": "intimacy",
-        "type": "multiple_choice",
-        "text": "Как вы воспринимаете физическую близость в паре?",
-        "options": [
-            "Важный язык любви",
-            "Приятно, но не главное",
-            "Нужен правильный эмоциональный климат",
-            "Сейчас это сложная / чувствительная тема",
-        ],
-    },
-    {
-        "id": "i2",
-        "category": "intimacy",
-        "type": "open_ended",
-        "text": "Что помогает вам чувствовать себя желанным(ой) и в безопасности в близости? Напишите коротко.",
-        "options": [],
-    },
-]
-
-assert len(BASE_QUESTIONS) == 15, "Нужно ровно 15 базовых вопросов"
-
-
-def base_total() -> int:
-    return len(BASE_QUESTIONS)
-
-
-def get_base_question(step: int) -> dict[str, Any] | None:
-    if 0 <= step < len(BASE_QUESTIONS):
-        return BASE_QUESTIONS[step]
-    return None
 
 
 def question_keyboard(step: int, question: dict[str, Any]) -> InlineKeyboardMarkup | None:
@@ -302,14 +137,21 @@ def question_keyboard(step: int, question: dict[str, Any]) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def format_base_question(step: int, question: dict[str, Any]) -> str:
+def format_base_question(step: int, question: dict[str, Any], *, user_id: int | None = None) -> str:
     total = base_total()
+    text = question.get("text") or ""
+    tmpl = question.get("text_template")
+    if tmpl:
+        import config
+
+        name = config.partner_name(user_id) if user_id else "ты"
+        text = str(tmpl).format(name=name or "ты")
     hint = (
         "\n\nВыберите вариант 👇"
         if question.get("type") == "multiple_choice"
         else "\n\nНапишите ответ одним сообщением ✍️"
     )
-    return f"📋 Анкета {step + 1}/{total}\n\n{question['text']}{hint}"
+    return f"📋 Анкета {step + 1}/{total}\n\n{text}{hint}"
 
 
 def format_followup_question(index: int, total: int, text: str) -> str:

@@ -1,6 +1,6 @@
 """
-Настройки бота. Секреты лучше задавать через переменные окружения
-или файл .env (не коммитить реальные токены в git).
+Настройки бота. Секреты — только в `.env` (см. `.env.example` / `config.example.py`).
+Не коммитьте реальные токены.
 """
 
 from __future__ import annotations
@@ -30,6 +30,13 @@ PRODUCT_NAME = os.getenv("PRODUCT_NAME", ASSISTANT_NAME)
 
 # Telegram
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ЗАМЕНИТЕ_НА_ТОКЕН_ОТ_BOTFATHER")
+# Username бота без @ (для deep-link t.me/... в Mini App)
+BOT_USERNAME = (
+    (os.getenv("BOT_USERNAME", "Familia_Quiz_bot") or "Familia_Quiz_bot")
+    .strip()
+    .lstrip("@")
+    .replace(" ", "")
+) or "Familia_Quiz_bot"
 
 # Telegram ID партнёров (числа). Узнать: написать @userinfobot
 PARTNER_A_ID = _env_int("PARTNER_A_ID", 0)

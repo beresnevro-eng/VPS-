@@ -1,28 +1,53 @@
-# Secrets & local runtime
+# === Secrets & local runtime ===
 .env
 .env.*
 !.env.example
+config_local.py
+*.pem
+*.key
+
+# === Databases ===
 data/
 *.db
+*.db.gz
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
-bot.log
-*.log
+*.sqlite3
 
-# Python
+# === Logs & backups ===
+*.log
+bot.log
+/tmp/shepot-backups/
+*.gpg
+secrets-export-*.tar
+secrets-export-*.tar.gpg
+
+# === Cloudflare ===
+.cloudflared/
+**/cloudflared/*.json
+
+# === Python ===
 .venv/
+venv/
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 
-# OS / IDE
+# === OS / IDE / agents ===
 .DS_Store
 .idea/
 .vscode/
+.cursor/
 .agent_write_test
+worktrees-test-write
 *.bak
 *.bak-*
 
-# Local agent helpers
+# === Local agent / ops helpers (may contain host-specific paths) ===
 AGENT_*.sh

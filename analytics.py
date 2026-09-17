@@ -57,19 +57,50 @@ def _format_answers_block(payload: dict) -> str:
     return "\n".join(lines)
 
 
-async def analyze_daily_quiz(quiz_id: int) -> tuple[str, bool]:
+def _local_match_stats(payload: dict) -> tuple[int, int]:
+    """Грубая эвристика совпадений + число вопросов (fallback, если AI не дал match_count)."""
+    questions = payload.get("questions") or []
+    qcount = len(questions)
+    matches = 0
+    for q in questions:
+        answers = [a for a in (q.get("answers") or []) if not a.get("skipped")]
+        if len(answers) < 2:
+            continue
+        opts = [(a.get("selected_option") or "").strip() for a in answers]
+        texts = [(a.get("text") or "").strip().lower() for a in answers]
+        if opts[0] and opts[1] and opts[0] == opts[1]:
+            matches += 1
+        elif texts[0] and texts[1] and texts[0] == texts[1]:
+            matches += 1
+    return matches, qcount
+
+
+def _clamp_int(value: Any, lo: int, hi: int, default: int | None = None) -> int | None:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, n))
+
+
+async def analyze_daily_quiz(quiz_id: int) -> tuple[str, dict[str, Any], bool]:
     """
     Сравнивает ответы обоих партнёров на квиз.
-    Returns: (текст для Telegram, ok).
+
+    Returns:
+        (текст для Telegram, metrics, ok)
+        metrics: temperature_score, match_count, question_count (при ok).
     """
     async with get_session() as session:
         payload = await load_quiz_for_analysis(session, quiz_id)
 
     answers_block = _format_answers_block(payload)
+    local_matches, question_count = _local_match_stats(payload)
     logger.info(
-        "analyze_daily_quiz DEBUG quiz_id=%s answers_len=%s",
+        "analyze_daily_quiz DEBUG quiz_id=%s answers_len=%s q=%s",
         quiz_id,
         len(answers_block),
+        question_count,
     )
     print(
         f"[Lumen DEBUG] daily quiz #{quiz_id} answers:\n{answers_block[:2500]}",
@@ -80,27 +111,70 @@ async def analyze_daily_quiz(quiz_id: int) -> tuple[str, bool]:
         f"{ai_service.voice_system_preamble()} "
         "Ты — Люм. Сравни ответы пары на сегодняшний квиз. "
         "Найди 1 совпадение и 1 различие. Дай мягкую рекомендацию на сегодня. "
-        "Обращайся к паре на «вы». Начни со слов «💡 Наши инсайты». "
+        "Обращайся к паре на «вы». В поле analysis начни со слов «💡 Наши инсайты». "
         "Не используй слово «проблема». Вместо этого используй "
         "«зона роста» или «точка внимания». "
-        "Подпишись как Люм. В конце — один открытый вопрос."
+        "Подпишись как Люм. В конце analysis — один открытый вопрос.\n\n"
+        "Верни ТОЛЬКО JSON-объект без markdown-ограждений:\n"
+        '{"analysis": "...", "temperature_score": 7, "match_count": 3}\n'
+        "temperature_score — целое 0–10: «температура отношений» на этом квизе. "
+        "0–3 холодно/напряжение; 4–6 нейтрально, есть что обсудить; "
+        "7–8 тепло, хорошее понимание; 9–10 очень тепло, сильная связь. "
+        "match_count — сколько вопросов из всех, где оба выбрали одинаковый вариант "
+        "или оба открытых ответа схожи по смыслу. "
+        "Без ключей кроме analysis, temperature_score, match_count."
     )
-    user = f"Ответы пары на сегодняшний квиз:\n\n{answers_block}"
+    user = (
+        f"Ответы пары на сегодняшний квиз ({question_count} вопросов):\n\n"
+        f"{answers_block}"
+    )
+
+    empty_metrics: dict[str, Any] = {
+        "temperature_score": None,
+        "match_count": None,
+        "question_count": question_count or None,
+    }
 
     try:
-        text = await ai_service._chat(
+        raw = await ai_service._chat(
             [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
             temperature=0.6,
-            max_tokens=1100,
+            max_tokens=1200,
         )
-        if not text or len(text.strip()) < 30:
-            raise RuntimeError("пустой инсайт от Groq")
-        if not text.strip().startswith("💡"):
-            text = f"💡 Наши инсайты\n\n{text.strip()}"
-        return ai_service.as_lumen(ai_service.with_open_question(text)), True
+        if not raw or len(raw.strip()) < 20:
+            raise RuntimeError("пустой инсайт от модели")
+
+        try:
+            data = _extract_json_object(raw)
+            analysis = str(data.get("analysis") or "").strip()
+            temp = _clamp_int(data.get("temperature_score"), 0, 10, default=None)
+            match = _clamp_int(
+                data.get("match_count"),
+                0,
+                max(question_count, 1),
+                default=None,
+            )
+        except Exception:
+            # Fallback: старый текстовый ответ без JSON
+            analysis = raw.strip()
+            temp = None
+            match = local_matches
+
+        if not analysis or len(analysis) < 30:
+            raise RuntimeError("слишком короткий analysis")
+        if not analysis.startswith("💡"):
+            analysis = f"💡 Наши инсайты\n\n{analysis}"
+
+        text = ai_service.as_lumen(ai_service.with_open_question(analysis))
+        metrics = {
+            "temperature_score": temp if temp is not None else 5,
+            "match_count": match if match is not None else local_matches,
+            "question_count": question_count,
+        }
+        return text, metrics, True
     except Exception as exc:
         logger.exception("analyze_daily_quiz failed: %s", exc)
         print(f"[Lumen DEBUG] daily analysis ERROR: {exc}", flush=True)
@@ -109,6 +183,7 @@ async def analyze_daily_quiz(quiz_id: int) -> tuple[str, bool]:
                 "🌿 Люм немного задумался... Давай попробуем собрать инсайт "
                 "по квизу чуть позже."
             ),
+            empty_metrics,
             False,
         )
 
