@@ -52,7 +52,8 @@ fi
 systemctl is-active --quiet xray 2>/dev/null && echo "OK  xray" || echo "FAIL xray"
 if [[ "$ROLE" == "entry" ]]; then
   systemctl is-active --quiet hysteria-server 2>/dev/null && echo "OK  hysteria-server" || echo "FAIL hysteria-server"
-  if ss -ulnp 2>/dev/null | grep -q hysteria; then
+  # avoid pipefail+grep -q SIGPIPE false negative
+  if ss -ulnp 2>/dev/null | grep hysteria >/dev/null; then
     echo "OK  UDP :443 (HY2)"
   else
     echo "FAIL UDP :443 (HY2)"
