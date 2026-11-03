@@ -31,7 +31,7 @@ Reverse WG нужен потому что **entry не достучится до
 | Где | Что |
 |-----|-----|
 | entry | `xray` на TCP `:443` Reality (SNI microsoft) |
-| entry | `hysteria-server` на UDP `:443` → SOCKS `10.99.0.2:11080` |
+| entry | `hysteria-server` на UDP `:8444` (salamander obfs) → SOCKS `10.99.0.2:11080` |
 | entry | `wg-quick@wg-hop` ListenPort `51820` |
 | Fornex | `wg-quick@wg-hop` Endpoint `194.226.54.124:51820` |
 | Fornex | Xray inbound `hop-socks` → `10.99.0.2:11080` |
@@ -77,7 +77,7 @@ systemctl restart wg-quick@wg-hop xray hysteria-server
 systemctl restart wg-quick@wg-hop xray
 ```
 
-UFW на entry: `22/tcp`, `443/tcp`, `443/udp`, `51820/udp`.
+UFW на entry: `22/tcp`, `443/tcp`, `8444/udp`, `51820/udp`.
 
 ## Важно
 
