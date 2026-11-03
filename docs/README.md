@@ -9,6 +9,7 @@
 |--------|---------|
 | Autopilot | `bash /root/vps-autopilot.sh` |
 | Health-check | `bash /root/health-check.sh` |
+| Hop (RU→Fornex) | `bash /root/hop-status.sh` · см. [TWO_HOP.md](TWO_HOP.md) |
 | Бэкап | `bash /root/backup-server.sh` |
 | Перезапуск бота | `systemctl restart xray-telegram-bot` |
 | Подписка в боте | `/sub` |
