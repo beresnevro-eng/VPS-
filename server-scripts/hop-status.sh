@@ -50,4 +50,12 @@ elif [[ "$ROLE" == "entry" ]]; then
 fi
 
 systemctl is-active --quiet xray 2>/dev/null && echo "OK  xray" || echo "FAIL xray"
+if [[ "$ROLE" == "entry" ]]; then
+  systemctl is-active --quiet hysteria-server 2>/dev/null && echo "OK  hysteria-server" || echo "FAIL hysteria-server"
+  if ss -ulnp 2>/dev/null | grep -qE '[:.]443 '; then
+    echo "OK  UDP :443 (HY2)"
+  else
+    echo "FAIL UDP :443 (HY2)"
+  fi
+fi
 systemctl is-active --quiet wg-quick@wg-hop 2>/dev/null && echo "OK  wg-quick@wg-hop" || echo "FAIL wg-quick@wg-hop"
