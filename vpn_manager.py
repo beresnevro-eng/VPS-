@@ -18,6 +18,8 @@ ACCESS_LOG = Path("/var/log/xray/access.log")
 ERROR_LOG = Path("/var/log/xray/error.log")
 HY2_LINK = Path("/root/hysteria2-link.txt")
 VPN_LINKS = Path("/root/vpn-links.txt")
+# Рабочие RU-entry ключи для /links и подписки (без мёртвых Fornex Reality)
+HOP_LINKS = Path("/root/hop-vpn-links.txt")
 DISABLED_CLIENTS = Path("/root/daily-telegram-security/disabled_clients.json")
 ALERT_STATE = Path("/root/daily-telegram-security/alert_state.json")
 SNI_STATE = Path("/root/daily-telegram-security/sni_rotation.json")
@@ -418,7 +420,41 @@ def _parse_links_file() -> list[dict]:
     return entries
 
 
+def _hop_link_entries() -> list[dict]:
+    """Рабочие RU-entry профили из hop-vpn-links.txt."""
+    if not HOP_LINKS.is_file():
+        return []
+    entries: list[dict] = []
+    for line in HOP_LINKS.read_text(errors="ignore").splitlines():
+        link = line.strip()
+        if not link or link.startswith("#"):
+            continue
+        if link.startswith("vless://"):
+            entries.append({
+                "label": "🇷🇺 RU-entry VLESS+Reality (Wi‑Fi / Челябинск)",
+                "link": link,
+                "uuid": "",
+                "port": 443,
+                "sni": "www.microsoft.com",
+                "profile": "iphone",
+            })
+        elif link.startswith("hysteria2://"):
+            entries.append({
+                "label": "⚡ RU-entry Hysteria2 (LTE / МТС Москва)",
+                "link": link,
+                "uuid": "",
+                "port": 8444,
+                "sni": "",
+                "profile": "hy2",
+            })
+    return entries
+
+
 def collect_link_entries(fp: str = "firefox") -> list[dict]:
+    hop = _hop_link_entries()
+    if hop:
+        return hop
+
     entries: list[dict] = []
     try:
         for ib in list_inbounds():
@@ -481,8 +517,19 @@ def _entries_for_profile(profile: str, fp: str = "firefox") -> list[dict]:
     key = profile.lower().strip()
     all_entries = collect_link_entries(fp)
 
-    if key in ("all", "все", "list", "список"):
+    if key in ("all", "все", "list", "список", "hop", ""):
         return all_entries
+
+    if key in ("legacy", "old", "fornex"):
+        # Явный запрос старых прямых Fornex-ссылок
+        HOP_LINKS_BAK = HOP_LINKS
+        try:
+            # temporarily ignore hop file
+            if HOP_LINKS.is_file():
+                return [{"label": "legacy", "link": "Переименуй hop-vpn-links.txt временно или смотри /root/vpn-links.txt", "uuid": "", "port": 0, "sni": ""}]
+        except Exception:
+            pass
+        return _parse_links_file() or all_entries
 
     if key in ("hy2", "hysteria", "hysteria2"):
         hy2 = [e for e in all_entries if e["link"].startswith("hysteria2://")]

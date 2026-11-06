@@ -45,8 +45,13 @@ Reverse WG нужен потому что **entry не достучится до
 |------|---------|--------|
 | `/root/phone-link.txt` | VLESS **RU-entry** | Wi‑Fi / Челябинск |
 | `/root/phone-hy2-link.txt` | Hysteria2 **RU-entry-HY2** | LTE МТС Москва и т.п. |
+| `/root/amnesiawg-clients/*.conf` | AmneziaWG | LTE МТС Москва (AmneziaVPN) |
 
-Импорт в Streisand / Hiddify — два профиля, на LTE Москвы включать HY2. Выходной IP: `103.75.126.216`.
+На Fornex бот читает рабочие ключи из `/root/hop-vpn-links.txt` (подписка `/sub`).
+Amnezia: `/awg iphone` · `/awg wife`.
+
+Импорт в Streisand / Hiddify — подписка URL (VLESS+HY2). Amnezia — отдельным приложением.
+VLESS/HY2 выход: `103.75.126.216`. AWG сейчас выходит через RU entry IP.
 
 ## Проверка
 
