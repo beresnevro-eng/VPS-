@@ -92,6 +92,65 @@ if curl -fsS -m 12 https://app.wspr.online/api/health 2>/dev/null | grep -q '"st
   echo "OK  app.wspr.online"
 else ISSUES+=("Шёпот: app.wspr.online недоступен"); echo "FAIL app.wspr.online"; fi
 
+# --- RU entry VPS (VK Cloud active + Fritato standby) ---
+probe_tcp() {
+  local host=$1 port=$2
+  timeout 3 bash -c "echo >/dev/tcp/${host}/${port}" 2>/dev/null
+}
+
+check_ru_entry() {
+  local name=$1 ip=$2 role=$3
+  local fail=0
+  if probe_tcp "$ip" 22; then
+    echo "OK  $name SSH :22 ($ip, $role)"
+  else
+    ISSUES+=("$name: SSH :22 недоступен ($ip)")
+    echo "FAIL $name SSH :22"
+    fail=1
+  fi
+  if probe_tcp "$ip" 443; then
+    echo "OK  $name VLESS :443 ($ip, $role)"
+  else
+    ISSUES+=("$name: :443 недоступен ($ip)")
+    echo "FAIL $name VLESS :443"
+    fail=1
+  fi
+  return "$fail"
+}
+
+echo "--- RU entries ---"
+check_ru_entry "VK Cloud" "195.133.146.140" "active" || true
+check_ru_entry "Fritato" "194.226.54.124" "standby" || true
+
+if [[ -f /etc/wireguard/wg-hop.conf ]] || ip link show wg-hop &>/dev/null; then
+  echo "--- hop ---"
+  if ip link show wg-hop &>/dev/null; then
+    echo "OK  wg-hop interface"
+  else
+    ISSUES+=("wg-hop интерфейс отсутствует"); echo "FAIL wg-hop interface"
+  fi
+  if ping -c1 -W2 10.99.0.1 >/dev/null 2>&1; then
+    echo "OK  ping hop peer 10.99.0.1"
+  else
+    ISSUES+=("hop: нет ping 10.99.0.1"); echo "FAIL ping 10.99.0.1"
+  fi
+  HS=$(wg show wg-hop latest-handshakes 2>/dev/null | awk 'NR==1 && $2+0>0 {print systime()-$2}')
+  if [[ -n "${HS:-}" ]]; then
+    if [[ "$HS" -le 180 ]]; then echo "OK  hop handshake ${HS}s ago"
+    else ISSUES+=("hop handshake устарел: ${HS}s"); echo "FAIL hop handshake ${HS}s"
+    fi
+  else
+    ISSUES+=("hop: нет handshake"); echo "FAIL hop handshake"
+  fi
+  EXIT_IP=$(curl -sS --max-time 8 --socks5-hostname 10.99.0.2:11081 https://ifconfig.me 2>/dev/null || true)
+  if [[ "$EXIT_IP" == "103.75.126.216" ]]; then
+    echo "OK  hop SOCKS exit $EXIT_IP"
+  else
+    ISSUES+=("hop SOCKS exit: ${EXIT_IP:-timeout}")
+    echo "FAIL hop SOCKS (got '${EXIT_IP:-timeout}')"
+  fi
+fi
+
 if [[ ${#ISSUES[@]} -gt 0 ]]; then
   MSG="⚠️ Health-check $(date +%H:%M):"
   for issue in "${ISSUES[@]}"; do

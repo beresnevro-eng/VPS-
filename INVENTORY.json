@@ -4,8 +4,26 @@
     "hostname": "287289.fornex.cloud",
     "provider": "Fornex",
     "timezone": "Europe/Berlin",
-    "updated": "2026-07-01"
+    "updated": "2026-11-07"
   },
+  "ru_entries": [
+    {
+      "name": "VK Cloud",
+      "ip": "195.133.146.140",
+      "role": "active",
+      "provider": "VK Cloud / Rucloud Korolyov",
+      "ports": {"tcp": [22, 443], "udp": [8444, 51820, 51830]},
+      "wg_hop": "10.99.0.1"
+    },
+    {
+      "name": "Fritato",
+      "ip": "194.226.54.124",
+      "role": "standby",
+      "provider": "Fritato / Freetato Moscow",
+      "ports": {"tcp": [22, 443], "udp": [8444, 51820, 51830]},
+      "note": "бывший entry; ~1 Mbps; снят с hop"
+    }
+  ],
   "services": [
     {
       "name": "xray",

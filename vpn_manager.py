@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import socket
 import subprocess
 from collections import Counter
 from datetime import datetime
@@ -25,6 +26,25 @@ ALERT_STATE = Path("/root/daily-telegram-security/alert_state.json")
 SNI_STATE = Path("/root/daily-telegram-security/sni_rotation.json")
 HYSTERIA_CFG = Path("/etc/hysteria/config.yaml")
 SERVER_IP = "103.75.126.216"
+HOP_SOCKS = ("10.99.0.2", 11081)
+HOP_PEER_IP = "10.99.0.1"
+EXPECTED_EXIT_IP = "103.75.126.216"
+
+# RU entry VPS (проверяются из бота на Fornex)
+RU_ENTRIES: list[dict] = [
+    {
+        "name": "VK Cloud",
+        "ip": "195.133.146.140",
+        "role": "active",  # текущий hop entry
+        "tcp": (22, 443),
+    },
+    {
+        "name": "Fritato",
+        "ip": "194.226.54.124",
+        "role": "standby",
+        "tcp": (22, 443),
+    },
+]
 
 # Порядок авто-ротации SNI на :443 (без apple/google — чаще режут)
 SNI_ROTATION_ORDER = ("cloudflare", "nginx", "github", "microsoft", "yahoo", "samsung")
@@ -944,6 +964,99 @@ def format_clients_report() -> str:
     return "\n".join(lines)
 
 
+def _tcp_open(host: str, port: int, timeout: float = 3.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _wg_hop_handshake_age() -> str | None:
+    """Возраст latest handshake peer wg-hop, или None."""
+    try:
+        r = _run(["wg", "show", "wg-hop", "latest-handshakes"], timeout=8)
+        # lines: <pubkey>\t<unix_ts>
+        for line in (r.stdout or "").splitlines():
+            parts = line.split()
+            if len(parts) >= 2 and parts[1].isdigit():
+                ts = int(parts[1])
+                if ts <= 0:
+                    return "never"
+                age = int(datetime.now().timestamp()) - ts
+                if age < 60:
+                    return f"{age}s"
+                if age < 3600:
+                    return f"{age // 60}m"
+                return f"{age // 3600}h"
+    except Exception:
+        return None
+    return None
+
+
+def _format_ru_entries_health() -> list[str]:
+    """Проверка двух RU entry + reverse WG hop."""
+    lines = ["", "🇷🇺 RU entry"]
+    for e in RU_ENTRIES:
+        role = "active" if e.get("role") == "active" else "standby"
+        bits = []
+        for port in e.get("tcp") or ():
+            ok = _tcp_open(e["ip"], int(port), timeout=3.0)
+            bits.append(f"{port}{'✅' if ok else '❌'}")
+        lines.append(f"• {e['name']} ({e['ip']}, {role}): " + " ".join(bits))
+
+    lines.append("")
+    lines.append("🔗 Hop Fornex↔entry")
+    hop_up = False
+    try:
+        r = _run(["ip", "link", "show", "wg-hop"], timeout=5)
+        hop_up = r.returncode == 0
+    except Exception:
+        hop_up = False
+    lines.append(f"wg-hop: {'✅ up' if hop_up else '❌ down'}")
+
+    age = _wg_hop_handshake_age()
+    if age is None:
+        lines.append("handshake: ❌ нет данных")
+    elif age == "never":
+        lines.append("handshake: ❌ never")
+    else:
+        # >3 min без keepalive — подозрительно (keepalive 25s)
+        warn = False
+        try:
+            if age.endswith("h") or (age.endswith("m") and int(age[:-1]) >= 3):
+                warn = True
+        except Exception:
+            pass
+        lines.append(f"handshake: {'⚠️' if warn else '✅'} {age} ago")
+
+    try:
+        r = _run(["ping", "-c1", "-W2", HOP_PEER_IP], timeout=5)
+        lines.append(f"ping {HOP_PEER_IP}: {'✅' if r.returncode == 0 else '❌'}")
+    except Exception:
+        lines.append(f"ping {HOP_PEER_IP}: ❌")
+
+    socks_host, socks_port = HOP_SOCKS
+    try:
+        r = _run(
+            [
+                "curl", "-sS", "--max-time", "8",
+                "--socks5-hostname", f"{socks_host}:{socks_port}",
+                "https://ifconfig.me",
+            ],
+            timeout=12,
+        )
+        exit_ip = (r.stdout or "").strip()
+        if exit_ip == EXPECTED_EXIT_IP:
+            lines.append(f"SOCKS exit: ✅ {exit_ip}")
+        else:
+            lines.append(f"SOCKS exit: ❌ {exit_ip or 'timeout'}")
+    except Exception:
+        lines.append("SOCKS exit: ❌ timeout")
+
+    return lines
+
+
 def format_health_check() -> str:
     lines = ["🩺 Проверка сервера", ""]
     xray = service_active("xray")
@@ -984,6 +1097,7 @@ def format_health_check() -> str:
         lines.append(f"Диск: {icon} {d['used']}/{d['size']} ({d['pct']})")
 
     lines.append(f"Uptime: {format_uptime()}")
+    lines.extend(_format_ru_entries_health())
     return "\n".join(lines)
 
 
