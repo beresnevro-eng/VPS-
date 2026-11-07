@@ -117,6 +117,7 @@ def format_awg_help() -> str:
         "/awg router — роутер\n"
         "/awg status — статус\n\n"
         f"Доступно: {', '.join(names)}\n\n"
-        "Клиент: <b>AmneziaVPN</b> → импорт .conf\n"
-        "Exit сейчас через RU entry IP (обход DPI до сервера)."
+        "Клиент: <b>AmneziaVPN</b> (App Store) → + → импорт .conf\n"
+        "Трафик: телефон → RU entry → Fornex → интернет.\n"
+        "У жены свой профиль: /awg wife (не шарь iphone.conf)."
     )

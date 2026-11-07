@@ -468,13 +468,15 @@ def format_subscription_help(n: int) -> str:
     )
     return (
         f"📬 <b>Подписка VPN</b> ({n} профиля)\n\n"
-        "Только рабочие: <b>RU-entry VLESS</b> + <b>Hysteria2</b>.\n"
-        "Мёртвые прямые Fornex Reality убраны.\n\n"
+        "Рабочие: <b>RU-entry VLESS</b> + <b>Hysteria2</b>.\n\n"
         f"{url_note}\n\n"
-        "<b>Streisand / Hiddify / V2RayTun:</b> вставь URL подписки\n"
-        "→ дальше достаточно «Обновить подписку».\n\n"
-        "AmneziaWG: отдельно /awg iphone или /awg wife\n"
-        "Одна ссылка: /links"
+        "<b>Если нет Happ (iPad / телефон жены):</b>\n"
+        "App Store → <b>Streisand</b> или <b>V2Box</b> или <b>Hiddify</b>\n"
+        "→ «Добавить из буфера» / Subscription → вставить URL.\n"
+        "На LTE МТС чаще стабильнее профиль <b>HY2</b>, не Reality.\n\n"
+        "Happ: файл <code>vpn-profiles.txt</code> → Поделиться → Открыть в Happ.\n\n"
+        "AmneziaWG: /awg wife · /awg iphone (приложение AmneziaVPN)\n"
+        "Одна ссылка: /links · QR: /qr"
     )
 
 
