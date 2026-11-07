@@ -4,7 +4,7 @@
 
 ```
 телефон ──VLESS+Reality TCP:443 ──┐
-         ──Hysteria2 UDP:8444 ────┼──► RU entry (194.226.54.124)
+         ──Hysteria2 UDP:8444 ────┼──► RU entry (195.133.146.140)
          ──AmneziaWG UDP:51830 ───┘
                                   │
                                   │ SOCKS / policy-route через reverse WireGuard
@@ -25,7 +25,7 @@ Reverse WG нужен потому что **entry не достучится до
 
 | Узел | Роль | IP |
 |------|------|-----|
-| RU entry | Reality/HY2/AWG inbound + WG listen | `194.226.54.124` · WG `10.99.0.1` |
+| RU entry | Reality/HY2/AWG inbound + WG listen | `195.133.146.140` · WG `10.99.0.1` |
 | Fornex | WG dial + SOCKS exit + старый exit | `103.75.126.216` · WG `10.99.0.2` |
 
 ## Сервисы
@@ -36,24 +36,23 @@ Reverse WG нужен потому что **entry не достучится до
 | entry | `hysteria-server` на UDP `:8444` (salamander) → SOCKS `10.99.0.2:11081` |
 | entry | `awg-quick@awg0` UDP `:51830` → policy route table 100 via `wg-hop` |
 | entry | `wg-quick@wg-hop` ListenPort `51820`, `Table=off`, `AllowedIPs=0.0.0.0/0` |
-| Fornex | `wg-quick@wg-hop` Endpoint `194.226.54.124:51820` |
+| Fornex | `wg-quick@wg-hop` Endpoint `195.133.146.140:51820` |
 | Fornex | `hop-socks` / `microsocks` на `10.99.0.2:11081` |
 | Fornex | `hop-forward-nat` — MASQUERADE `10.99.0.0/24` и `10.66.77.0/24` |
 
 ## Скорость и Instagram
 
-Замеры с RU entry (Fritato AS219061, Москва), стабильно:
+Активный RU entry: **VK Cloud `195.133.146.140`** (старый Fritato `194.226.54.124` отключён от hop).
+
+Замеры с нового entry (2026-11-07):
 
 | Путь | Скорость |
 |------|----------|
-| Entry → Cloudflare напрямую | ~0.9 Mbps |
-| Entry → Fornex по WG (iperf -R) | ~0.9 Mbps |
-| SOCKS через hop → Instagram HTML | HTTP 200, ~0.7–0.9 Mbps |
-| Fornex напрямую → Cloudflare | ~100–200 Mbps |
-
-Потолок **~1 Mbps на всём hop** — не конфиг VPN и не «тариф 1 Mbps» в маркетинге Fornex. Узкое место: **канал самого RU entry** (provider soft-cap / peering). Для ленты/чатов хватает; для Reels/Stories часто не хватает — буфер не успевает. «У жены иногда простирается» = короткий ролик / краткий всплеск / другой профиль.
-
-Видео смотреть стабильно через hop нельзя, пока entry не даст десятки Mbps. Варианты: другой RU VPS с реальной скоростью или прямой Fornex-профиль, когда оператор пускает UDP/TCP до `103.75.126.216`.
+| Entry → Cloudflare напрямую | ~7–12 MB/s |
+| Entry → Yandex mirror | ~8–10 MB/s |
+| SOCKS hop → Cloudflare 5 MB | ~2.0 MB/s (~16 Mbps) |
+| SOCKS hop → Instagram | HTTP 200 |
+| Exit IP через hop | `103.75.126.216` |
 
 ## Ссылки для телефона
 
