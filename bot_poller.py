@@ -48,6 +48,8 @@ HELP_TEXT = """<b>Команды</b>
 /vpn — статус VPN
 /test iphone — тест подключения (50 сек)
 /qr iphone — QR-код ссылки
+/awg wife — AmneziaWG конфиг (жена)
+/awg iphone — AmneziaWG конфиг
 
 <b>Ссылки</b>
 /links — все
@@ -115,6 +117,7 @@ def kb_main() -> dict:
         [_btn("📊 Сводка", "m:dash"), _btn("🩺 Проверка", "m:check")],
         [_btn("🔗 Ссылки", "m:links"), _btn("📷 QR iPhone", "q:iphone")],
         [_btn("🔌 Тест VPN", "m:test"), _btn("📬 Подписка", "m:sub")],
+        [_btn("🛡 AmneziaWG", "m:awg"), _btn("📷 AWG wife", "a:wife")],
         [_btn("👤 Клиенты", "m:users"), _btn("🔧 Вкл/Выкл", "m:manage")],
         [_btn("🎭 SNI", "m:sni"), _btn("📊 Активность", "m:clients")],
         [_btn("💾 Диск", "m:disk"), _btn("📦 Бэкап", "m:backup")],
@@ -482,6 +485,58 @@ def clients_mod():
     return load_module("clients_mgr", "clients.py")
 
 
+def awg_mod():
+    return load_module("awg_mgr", "awg_manager.py")
+
+
+def kb_awg() -> dict:
+    return {"inline_keyboard": [
+        [_btn("📱 iphone", "a:iphone"), _btn("👩 wife", "a:wife")],
+        [_btn("🌐 router", "a:router"), _btn("💻 macbook", "a:macbook")],
+        [_btn("📊 Статус", "a:status"), _btn("⬅️ Меню", "m:main")],
+    ]}
+
+
+def send_awg_profile(token: str, chat_id: int, profile: str) -> None:
+    awg = awg_mod()
+    key = (profile or "").strip().lower()
+    if key in ("", "help", "помощь"):
+        send_message(token, chat_id, awg.format_awg_help(), reply_markup=kb_awg())
+        return
+    if key in ("status", "статус"):
+        send_message(token, chat_id, awg.format_awg_status(), parse_mode=None, reply_markup=kb_awg())
+        return
+    path = awg.client_config_path(key)
+    if path is None:
+        names = ", ".join(awg.list_client_names()) or "—"
+        send_message(
+            token, chat_id,
+            f"Нет профиля <b>{html.escape(key)}</b>.\nДоступно: {html.escape(names)}\n\n"
+            "/awg iphone · /awg wife · /awg status",
+            reply_markup=kb_awg(),
+        )
+        return
+    name = path.stem
+    send_message(
+        token, chat_id,
+        f"🛡 AmneziaWG — <b>{html.escape(name)}</b>\n"
+        "App Store → <b>AmneziaVPN</b> → + → импорт файла ниже.\n"
+        "На LTE МТС часто стабильнее Happ/Reality.",
+        reply_markup=kb_awg(),
+    )
+    try:
+        send_document(
+            token, chat_id, path,
+            caption=f"awg-{name}.conf → открыть в AmneziaVPN",
+        )
+    except Exception as e:
+        send_message(
+            token, chat_id,
+            f"⚠️ Файл не отправился: {e}\n\n<code>{html.escape(path.read_text()[:3500])}</code>",
+            reply_markup=kb_awg(),
+        )
+
+
 def send_message(
     token: str,
     chat_id: int,
@@ -686,6 +741,7 @@ def set_commands(token: str) -> None:
         {"command": "test", "description": "Тест VPN-подключения"},
         {"command": "manage", "description": "Вкл/выкл клиентов"},
         {"command": "sub", "description": "Подписочная ссылка"},
+        {"command": "awg", "description": "AmneziaWG конфиг (iphone/wife)"},
         {"command": "newclient", "description": "Новый UUID-клиент"},
         {"command": "users", "description": "Список всех клиентов"},
         {"command": "backup", "description": "Создать и скачать бэкап"},
@@ -723,6 +779,8 @@ PLAIN_ALIASES: dict[str, str] = {
     "управление": "/manage",
     "подписка": "/sub",
     "пользователи": "/users",
+    "amnezia": "/awg",
+    "awg": "/awg",
 }
 
 
@@ -921,6 +979,9 @@ def handle_command(token: str, chat_id: int, text: str, role: str = "admin") -> 
         send_message(token, chat_id, vpn.format_clients_report(), parse_mode=None, reply_markup=kb_main())
     elif cmd == "/sub":
         send_subscription(token, chat_id, cl)
+    elif cmd == "/awg":
+        profile = args[0] if args else "help"
+        send_awg_profile(token, chat_id, profile)
     elif cmd in ("/newclient", "/addclient"):
         if not args:
             send_message(token, chat_id, "Пример: /newclient Друг\nИли: /newclient Друг 50 (лимит 50 ГБ)")
@@ -976,6 +1037,10 @@ def handle_callback(token: str, chat_id: int, callback_id: str, data: str, role:
         send_message(token, chat_id, vpn.format_dashboard(), parse_mode=None, reply_markup=kb_main())
     elif data == "m:check":
         send_message(token, chat_id, vpn.format_health_check(), parse_mode=None, reply_markup=kb_main())
+    elif data == "m:awg":
+        send_awg_profile(token, chat_id, "help")
+    elif data.startswith("a:"):
+        send_awg_profile(token, chat_id, data[2:])
     elif data == "m:links":
         send_message(token, chat_id, "Выберите профиль:", reply_markup=kb_links())
     elif data == "m:sni":
