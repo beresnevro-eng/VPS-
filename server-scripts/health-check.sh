@@ -13,6 +13,7 @@ check_service() {
     xray) pgrep -f '/usr/local/bin/xray run' >/dev/null 2>&1 && { echo "OK  $name (process)"; return; } ;;
     hysteria-server) pgrep -f 'hysteria server' >/dev/null 2>&1 && { echo "OK  $name (process)"; return; } ;;
     xray-telegram-bot) pgrep -f 'bot_poller.py' >/dev/null 2>&1 && { echo "OK  $name (process)"; return; } ;;
+    awg-quick@*) ip link show awg0 &>/dev/null && awg show awg0 &>/dev/null && { echo "OK  $name (interface)"; return; } ;;
   esac
   ISSUES+=("$name не запущен")
   echo "FAIL $name"
@@ -33,6 +34,23 @@ echo "=== Health check $(date -Is) ==="
 check_service xray
 check_service xray-telegram-bot
 check_service hysteria-server
+
+if [[ -f /etc/amnezia/amneziawg/awg0.conf ]] || [[ -f /etc/wireguard/awg0.conf ]]; then
+  check_service awg-quick@awg0
+fi
+
+if [[ -f /etc/wireguard/wg-hop.conf ]]; then
+  if systemctl is-active --quiet wg-quick@wg-hop 2>/dev/null || ip link show wg-hop &>/dev/null; then
+    echo "OK  wg-quick@wg-hop"
+  else
+    ISSUES+=("wg-hop не запущен")
+    echo "FAIL wg-quick@wg-hop"
+  fi
+fi
+
+if dpkg -s fail2ban &>/dev/null; then
+  check_service fail2ban
+fi
 
 check_file /usr/local/etc/xray/config.json "Xray config"
 check_file /root/daily-telegram-security/xray-config.json "Xray mirror"
@@ -57,6 +75,22 @@ CHAT=$(grep -m1 '^TG_CHAT_ID=' /root/daily-telegram-security/config.env 2>/dev/n
 if [[ -n "$TOKEN" ]] && curl -fsS -m 15 "https://api.telegram.org/bot${TOKEN}/getMe" | grep -q '"ok":true'; then
   echo "OK  Telegram API"
 else ISSUES+=("Telegram API недоступен"); echo "FAIL Telegram API"; fi
+
+# --- Шёпот Mini App ---
+SHEPOT_API=$(pgrep -fc '/root/couple-quiz-bot/.venv/bin/python' 2>/dev/null || echo 0)
+if [[ "$SHEPOT_API" -ge 1 ]]; then echo "OK  shepot bot process ($SHEPOT_API)"
+else ISSUES+=("Шёпот: бот не запущен"); echo "FAIL shepot bot"; fi
+
+if curl -fsS -m 3 --noproxy '*' http://127.0.0.1:8787/api/health 2>/dev/null | grep -q '"status"'; then
+  echo "OK  shepot API :8787"
+else ISSUES+=("Шёпот: API :8787 не отвечает"); echo "FAIL shepot API"; fi
+
+if pgrep -x cloudflared >/dev/null 2>&1; then echo "OK  cloudflared"
+else ISSUES+=("Шёпот: cloudflared не запущен (Mini App недоступен)"); echo "FAIL cloudflared"; fi
+
+if curl -fsS -m 12 https://app.wspr.online/api/health 2>/dev/null | grep -q '"status"'; then
+  echo "OK  app.wspr.online"
+else ISSUES+=("Шёпот: app.wspr.online недоступен"); echo "FAIL app.wspr.online"; fi
 
 if [[ ${#ISSUES[@]} -gt 0 ]]; then
   MSG="⚠️ Health-check $(date +%H:%M):"
