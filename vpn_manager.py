@@ -33,13 +33,13 @@ EXPECTED_EXIT_IP = "103.75.126.216"
 # RU entry VPS (проверяются из бота на Fornex)
 RU_ENTRIES: list[dict] = [
     {
-        "name": "VK Cloud",
+        "name": "RuVDS",
         "ip": "195.133.146.140",
         "role": "active",  # текущий hop entry
         "tcp": (22, 443),
     },
     {
-        "name": "Fritato",
+        "name": "RuVDS-old",
         "ip": "194.226.54.124",
         "role": "standby",
         "tcp": (22, 443),

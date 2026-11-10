@@ -4,45 +4,58 @@
 
 ```
 телефон ──VLESS+Reality TCP:443 ──┐
-         ──Hysteria2 UDP:8444 ────┼──► RU entry (195.133.146.140)
+         ──Hysteria2 UDP:8444 ────┼──► RuVDS entry (195.133.146.140)
          ──AmneziaWG UDP:51830 ───┘
                                   │
-                                  │ SOCKS / policy-route через reverse WireGuard
-                                  ▼
-                               Fornex (10.99.0.2:11081 microsocks) ──► интернет
-                                  ▲
-                                  │ WG dial (Fornex → entry:51820)
-                               Fornex wg-hop 10.99.0.2
+                    ┌─────────────┴─────────────┐
+                    │ geoip:ru / банки / маркеты │
+                    ▼                           ▼
+             eth0 напрямую              SOCKS hop → Fornex
+             (RU IP RuVDS)              (103.75.126.216)
 ```
 
 - **VLESS Reality** — Wi‑Fi / регионы, где TCP Reality проходит (напр. МТС Челябинск).
 - **Hysteria2** — LTE МТС Москва и другие сети, где Reality рвётся после handshake.
-- **AmneziaWG** — LTE МТС Москва; трафик clients `10.66.77.0/24` уходит в Fornex (не в RU eth0).
+- **AmneziaWG** — LTE МТС Москва; foreign → Fornex (`table 100`), **RU → eth0** (`fwmark` + `ipset ru_direct`).
 
 Reverse WG нужен потому что **entry не достучится до Fornex**, а Fornex→entry UDP 51820 проходит.
+
+## Split: российский трафик напрямую
+
+На entry скрипт `/root/entry-ru-direct.sh` (зеркало в `server-scripts/entry-ru-direct.sh`):
+
+| Протокол | RU (банки, маркетплейсы, geoip:ru) | Остальное |
+|----------|-------------------------------------|-----------|
+| Xray | outbound `direct` (geosite/domain/geoip) | SOCKS Fornex |
+| Hysteria2 | ACL `direct(...)` | `fornex(all)` |
+| AmneziaWG | ipset `ru_direct` → table 101 → eth0 | table 100 → wg-hop |
+
+Переприменить: `bash /root/entry-ru-direct.sh apply` · проверка: `... verify`.
 
 ## Адреса
 
 | Узел | Роль | IP |
 |------|------|-----|
-| RU entry | Reality/HY2/AWG inbound + WG listen | `195.133.146.140` · WG `10.99.0.1` |
-| Fornex | WG dial + SOCKS exit + старый exit | `103.75.126.216` · WG `10.99.0.2` |
+| RuVDS entry | Reality/HY2/AWG + WG listen | `195.133.146.140` · WG `10.99.0.1` · host `ruvds-u6jt0` |
+| RuVDS-old | standby (снят с hop) | `194.226.54.124` |
+| Fornex | WG dial + SOCKS exit | `103.75.126.216` · WG `10.99.0.2` |
 
 ## Сервисы
 
 | Где | Что |
 |-----|-----|
-| entry | `xray` на TCP `:443` Reality (SNI microsoft) → SOCKS `10.99.0.2:11081` |
-| entry | `hysteria-server` на UDP `:8444` (salamander) → SOCKS `10.99.0.2:11081` |
-| entry | `awg-quick@awg0` UDP `:51830` → policy route table 100 via `wg-hop` |
-| entry | `wg-quick@wg-hop` ListenPort `51820`, `Table=off`, `AllowedIPs=0.0.0.0/0` |
+| entry | `xray` TCP `:443` Reality → **split** direct/RU + SOCKS hop |
+| entry | `hysteria-server` UDP `:8444` → **split** ACL |
+| entry | `awg-quick@awg0` UDP `:51830` → table 100 hop + table 101 RU-direct |
+| entry | `wg-quick@wg-hop` ListenPort `51820`, `Table=off` |
+| entry | `ru-direct-refresh.timer` — еженедельное обновление RU CIDR |
 | Fornex | `wg-quick@wg-hop` Endpoint `195.133.146.140:51820` |
 | Fornex | `hop-socks` / `microsocks` на `10.99.0.2:11081` |
 | Fornex | `hop-forward-nat` — MASQUERADE `10.99.0.0/24` и `10.66.77.0/24` |
 
 ## Скорость и Instagram
 
-Активный RU entry: **VK Cloud `195.133.146.140`** (старый Fritato `194.226.54.124` отключён от hop).
+Активный RU entry: **RuVDS `195.133.146.140`** (старый `194.226.54.124` отключён от hop).
 
 Замеры с нового entry (2026-11-07):
 
@@ -68,7 +81,7 @@ Reverse WG нужен потому что **entry не достучится до
 Amnezia: `/awg iphone` · `/awg wife`.
 
 Импорт в Streisand / Hiddify — подписка URL (VLESS+HY2). Amnezia — отдельным приложением.
-VLESS / HY2 / AWG выход: `103.75.126.216`.
+Иностранный трафик выходит с `103.75.126.216`; российский — с `195.133.146.140`.
 
 ## Проверка
 

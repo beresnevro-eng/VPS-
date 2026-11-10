@@ -92,7 +92,7 @@ if curl -fsS -m 12 https://app.wspr.online/api/health 2>/dev/null | grep -q '"st
   echo "OK  app.wspr.online"
 else ISSUES+=("Шёпот: app.wspr.online недоступен"); echo "FAIL app.wspr.online"; fi
 
-# --- RU entry VPS (VK Cloud active + Fritato standby) ---
+# --- RU entry VPS (RuVDS active + RuVDS-old standby) ---
 probe_tcp() {
   local host=$1 port=$2
   timeout 3 bash -c "echo >/dev/tcp/${host}/${port}" 2>/dev/null
@@ -119,8 +119,8 @@ check_ru_entry() {
 }
 
 echo "--- RU entries ---"
-check_ru_entry "VK Cloud" "195.133.146.140" "active" || true
-check_ru_entry "Fritato" "194.226.54.124" "standby" || true
+check_ru_entry "RuVDS" "195.133.146.140" "active" || true
+check_ru_entry "RuVDS-old" "194.226.54.124" "standby" || true
 
 if [[ -f /etc/wireguard/wg-hop.conf ]] || ip link show wg-hop &>/dev/null; then
   echo "--- hop ---"

@@ -8,18 +8,20 @@
   },
   "ru_entries": [
     {
-      "name": "VK Cloud",
+      "name": "RuVDS",
       "ip": "195.133.146.140",
       "role": "active",
-      "provider": "VK Cloud / Rucloud Korolyov",
+      "provider": "RuVDS",
+      "hostname": "ruvds-u6jt0",
       "ports": {"tcp": [22, 443], "udp": [8444, 51820, 51830]},
-      "wg_hop": "10.99.0.1"
+      "wg_hop": "10.99.0.1",
+      "routing": "RU direct (geoip/geosite) + foreign via Fornex hop"
     },
     {
-      "name": "Fritato",
+      "name": "RuVDS-old",
       "ip": "194.226.54.124",
       "role": "standby",
-      "provider": "Fritato / Freetato Moscow",
+      "provider": "RuVDS (старый PROMO)",
       "ports": {"tcp": [22, 443], "udp": [8444, 51820, 51830]},
       "note": "бывший entry; ~1 Mbps; снят с hop"
     }

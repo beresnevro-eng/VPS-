@@ -10,8 +10,8 @@
 | Autopilot | `bash /root/vps-autopilot.sh` |
 | Health-check | `bash /root/health-check.sh` · в боте кнопка «🩺 Проверка» / `/check` |
 | Hop (RU→Fornex) | `bash /root/hop-status.sh` · см. [TWO_HOP.md](TWO_HOP.md) |
-| RU entry (active) | VK Cloud `195.133.146.140` |
-| RU entry (standby) | Fritato `194.226.54.124` |
+| RU entry (active) | RuVDS `195.133.146.140` (`ruvds-u6jt0`) · RU-direct split |
+| RU entry (standby) | RuVDS-old `194.226.54.124` |
 | Бэкап | `bash /root/backup-server.sh` |
 | Перезапуск бота | `systemctl restart xray-telegram-bot` |
 | Подписка в боте | `/sub` |
