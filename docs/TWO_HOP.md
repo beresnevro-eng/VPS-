@@ -144,3 +144,16 @@ UFW на entry: `22/tcp`, `443/tcp`, `8444/udp`, `51820/udp`, `51830/udp`.
 
 Сервисы Fornex: `wg-quick@wg-hop`, `hop-socks`, `hop-socks-local`, `hop-bridge-ssh`, `hop-watchdog.timer`.
 
+## AmneziaWG: куда уходит трафик
+
+Клиенты `10.66.77.0/24`. Российские адреса из `ipset ru_direct` помечаются и уходят в table 101 → `eth0` (IP самого RuVDS). Остальное — table 100:
+
+| Entry | Default в table 100 | Куда дальше |
+|-------|---------------------|-------------|
+| новый `195.133.146.140` | `dev hop-tun` | tun2socks → SOCKS `10.77.0.1:11083` **через `wg-ru`** → Fornex |
+| старый `194.226.54.124` | `via 10.99.0.2 dev wg-hop` | WG hop → Fornex |
+
+На новом entry tun2socks обязан набирать SOCKS с `--interface=wg-ru`. Выход через `eth0` до `10.77.0.1` не доходит: рукопожатие Amnezia есть, интернета нет. Скрипт: `server-scripts/hop-tun2socks.sh` → `/usr/local/sbin/hop-tun2socks.sh`.
+
+На старом entry маршрут table 100 пропадает, если `wg-hop` перезапускали без PostUp. PostUp в `/etc/wireguard/wg-hop.conf` и `entry-watchdog.sh` его возвращают.
+
