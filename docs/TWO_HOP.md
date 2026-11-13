@@ -121,17 +121,26 @@ UFW на entry: `22/tcp`, `443/tcp`, `8444/udp`, `51820/udp`, `51830/udp`.
 - На entry у `wg-hop` обязательно `Table = off` + ручной `PostUp` маршрут `10.99.0.0/24`, иначе `AllowedIPs=0.0.0.0/0` утащит default route и убьёт SSH.
 - После смены ключей WG — обновить peer public key на обеих сторонах и `systemctl restart wg-quick@wg-hop`.
 
-## Аварийный мост (2026-11-13)
 
-Прямой WireGuard Fornex↔RuVDS (`195.133.146.140`) оборван: ответы RuVDS→Fornex не доходят (TCP/UDP).
+## Надёжный dual-entry (с 2026-11-13)
 
-Временный путь выхода:
-`phone → RuVDS active → SSH local forward → RuVDS-old:11081 ← SSH -R ← Fornex microsocks → интернет`
+Проблема: с **нового** RuVDS (`195.133.146.140`) ответы до Fornex часто не доходят (асимметрия). WG Fornex↔**RuVDS-old** (`194.226.54.124`) стабилен.
 
-Сервисы:
-- Fornex: `hop-bridge-ssh`, `hop-socks-local` (127.0.0.1:11082)
-- RuVDS-old: reverse listen `:11081`
-- RuVDS active: `hop-socks-forward` (127.0.0.1:11081), Xray/HY2 socks→localhost, AWG через `hop-tun2socks`
+```
+Телефон ──► RuVDS (new) ──SSH forward──► RuVDS-old:11081 ──┐
+         ──► RuVDS-old (VLESS/HY2/AWG) ─────────────────────┤
+                                                            ▼
+                                              WG hop / SSH -R ◄── Fornex dials
+                                                            ▼
+                                                    microsocks → интернет
+                                                      103.75.126.216
+```
 
-Проверка: `curl --socks5-hostname 127.0.0.1:11081 https://ifconfig.me` → `103.75.126.216`
+Принципы:
+1. Fornex **сам** держит туннель (WG dial + `autossh -R`) — RU не инициирует выход на Fornex.
+2. Watchdog каждую минуту: Fornex `/root/hop-watchdog.sh`, на каждом entry `/root/entry-watchdog.sh`.
+3. В боте `/sub` и `/links` — профили **обоих** entry (`/root/hop-vpn-links.txt`).
+4. Amnezia: `/awg wife` (new) · `/awg old wife` (old).
+
+Сервисы Fornex: `wg-quick@wg-hop`, `hop-socks`, `hop-socks-local`, `hop-bridge-ssh`, `hop-watchdog.timer`.
 

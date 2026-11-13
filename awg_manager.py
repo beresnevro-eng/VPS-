@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""AmneziaWG helpers for Telegram bot (параллельный UDP-туннель)."""
+"""AmneziaWG helpers for Telegram bot (dual RU entries)."""
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
 
 AWG_PORT = 51830
-# Предпочитаем конфиги RU-entry hop; fallback — локальный Fornex AWG
-AWG_CLIENTS_DIR_HOP = Path("/root/hop-amnesiawg-clients")
+AWG_CLIENTS_DIR_NEW = Path("/root/hop-amnesiawg-clients")
+AWG_CLIENTS_DIR_OLD = Path("/root/hop-amnesiawg-clients-old")
 AWG_CLIENTS_DIR_LOCAL = Path("/root/amnesiawg-clients")
 AWG_SERVER_CONF = Path("/etc/amnezia/amneziawg/awg0.conf")
 AWG_INFO = Path("/root/amnesiawg-info.txt")
@@ -29,95 +29,82 @@ PROFILE_ALIASES: dict[str, str] = {
 }
 
 
-def _clients_dir() -> Path:
-    if AWG_CLIENTS_DIR_HOP.is_dir() and any(AWG_CLIENTS_DIR_HOP.glob("*.conf")):
-        return AWG_CLIENTS_DIR_HOP
-    return AWG_CLIENTS_DIR_LOCAL
-
-
-AWG_CLIENTS_DIR = AWG_CLIENTS_DIR_HOP  # default for docs; runtime uses _clients_dir()
-
-
 def _run(cmd: list[str], timeout: float = 15.0) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
+def _dir_for(which: str = "new") -> Path:
+    if which in ("old", "ru-old", "ruvds-old", "standby"):
+        if AWG_CLIENTS_DIR_OLD.is_dir() and any(AWG_CLIENTS_DIR_OLD.glob("*.conf")):
+            return AWG_CLIENTS_DIR_OLD
+    if AWG_CLIENTS_DIR_NEW.is_dir() and any(AWG_CLIENTS_DIR_NEW.glob("*.conf")):
+        return AWG_CLIENTS_DIR_NEW
+    return AWG_CLIENTS_DIR_LOCAL
+
+
+def _parse_profile(profile: str) -> tuple[str, str]:
+    """Return (which_entry, profile_name). Supports 'old wife', 'wife-old'."""
+    key = (profile or "").strip().lower().replace("_", "-")
+    which = "new"
+    parts = key.split()
+    if len(parts) >= 2 and parts[0] in ("old", "new", "ru-old", "ruvds-old", "standby"):
+        which = "old" if parts[0] != "new" else "new"
+        key = parts[1]
+    elif key.endswith("-old") or key.endswith(".old"):
+        which = "old"
+        key = key.rsplit("-", 1)[0].rsplit(".", 1)[0]
+    elif key.startswith("old-"):
+        which = "old"
+        key = key[4:]
+    name = PROFILE_ALIASES.get(key, key)
+    return which, name
+
+
 def awg_installed() -> bool:
-    return bool(list_client_names()) or AWG_SERVER_CONF.is_file()
+    return bool(list_client_names()) or bool(list_client_names("old")) or AWG_SERVER_CONF.is_file()
 
 
 def awg_service_state() -> str:
-    # Hop-конфиги лежат на Fornex-боте, сервис крутится на RU entry
-    if _clients_dir() == AWG_CLIENTS_DIR_HOP:
-        return "RU-entry (конфиги синхронизированы)"
-    if not AWG_SERVER_CONF.is_file():
-        return "not installed"
-    r = _run(["systemctl", "is-active", AWG_UNIT], timeout=8)
-    return (r.stdout or r.stderr or "unknown").strip()
+    return "RuVDS + RuVDS-old (конфиги на боте)"
 
 
 def awg_active() -> bool:
-    state = awg_service_state()
-    return state == "active" or state.startswith("RU-entry")
+    return awg_installed()
 
 
-def list_client_names() -> list[str]:
-    d = _clients_dir()
+def list_client_names(which: str = "new") -> list[str]:
+    d = _dir_for(which)
     if not d.is_dir():
         return []
     return sorted(p.stem for p in d.glob("*.conf"))
 
 
 def client_config_path(profile: str) -> Path | None:
-    key = profile.lower().strip()
-    if key in ("all", "все", "list"):
+    which, name = _parse_profile(profile)
+    if name in ("all", "все", "list", "help", "помощь", "status", "статус"):
         return None
-    name = PROFILE_ALIASES.get(key, key)
-    path = _clients_dir() / f"{name}.conf"
+    path = _dir_for(which) / f"{name}.conf"
     return path if path.is_file() else None
 
 
 def format_awg_status() -> str:
-    if not awg_installed():
-        return (
-            "🛡 AmneziaWG: не установлен\n"
-            f"UDP порт (план): {AWG_PORT}\n"
-            "Установка на RU entry: bash /root/setup-amnesiawg-lite.sh"
-        )
-    clients = ", ".join(list_client_names()) or "—"
-    lines = [
-        "🛡 AmneziaWG (RU-entry :51830)",
-        f"Статус: {awg_service_state()}",
-        f"Профили: {clients}",
-        "Конфиг: /awg iphone · /awg wife · /awg router",
-    ]
-    info = AWG_INFO_HOP if AWG_INFO_HOP.is_file() else AWG_INFO
-    if info.is_file():
-        try:
-            first = info.read_text(errors="ignore").splitlines()[0].strip()
-            if first:
-                lines.insert(1, first)
-        except Exception:
-            pass
-    return "\n".join(lines)
+    new = ", ".join(list_client_names("new")) or "—"
+    old = ", ".join(list_client_names("old")) or "—"
+    return "\n".join([
+        "🛡 AmneziaWG",
+        f"RuVDS (:51830): {new}",
+        f"RuVDS-old (:51830): {old}",
+        "/awg wife · /awg old wife · /awg iphone",
+    ])
 
 
 def format_awg_help() -> str:
-    names = list_client_names()
-    if not names:
-        return (
-            "AmneziaWG ещё не развёрнут.\n\n"
-            "После установки на RU entry: /awg iphone"
-        )
     return (
-        "🛡 <b>AmneziaWG</b> — RU-entry UDP (для МТС Москва)\n\n"
-        "Команды:\n"
-        "/awg iphone — твой iPhone\n"
-        "/awg wife — iPhone жены\n"
-        "/awg router — роутер\n"
-        "/awg status — статус\n\n"
-        f"Доступно: {', '.join(names)}\n\n"
-        "Клиент: <b>AmneziaVPN</b> (App Store) → + → импорт .conf\n"
-        "Трафик: телефон → RU entry → Fornex → интернет.\n"
-        "У жены свой профиль: /awg wife (не шарь iphone.conf)."
+        "🛡 <b>AmneziaWG</b> — два entry\n\n"
+        "<b>RuVDS (новый)</b>\n"
+        "/awg iphone · /awg wife · /awg router\n\n"
+        "<b>RuVDS-old</b>\n"
+        "/awg old iphone · /awg old wife · /awg old router\n\n"
+        "Клиент: <b>AmneziaVPN</b> → + → импорт .conf\n"
+        "На LTE МТС часто стабильнее Happ/Reality."
     )

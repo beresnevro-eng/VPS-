@@ -119,8 +119,15 @@ check_ru_entry() {
 }
 
 echo "--- RU entries ---"
-check_ru_entry "RuVDS" "195.133.146.140" "active" || true
-check_ru_entry "RuVDS-old" "194.226.54.124" "standby" || true
+# RuVDS-new: Fornex may not TCP directly (asymmetric). Probe via old jump.
+if ssh -i /root/.ssh/id_hop_bridge -o BatchMode=yes -o ConnectTimeout=8 root@194.226.54.124 \
+    "timeout 3 bash -c 'echo >/dev/tcp/195.133.146.140/443'" 2>/dev/null; then
+  echo "OK  RuVDS VLESS :443 via-old-jump (195.133.146.140, active)"
+else
+  ISSUES+=("RuVDS: :443 недоступен (195.133.146.140)")
+  echo "FAIL RuVDS VLESS :443"
+fi
+check_ru_entry "RuVDS-old" "194.226.54.124" "hop-peer" || true
 
 if [[ -f /etc/wireguard/wg-hop.conf ]] || ip link show wg-hop &>/dev/null; then
   echo "--- hop ---"
