@@ -31,13 +31,15 @@ from vpn_manager import (
 DIR = Path(__file__).resolve().parent
 CLIENTS_DB = DIR / "clients_db.json"
 SUB_EXPORT_FILE = DIR / "vpn-profiles.txt"
+# Только рабочие ключи RU-entry (VLESS + HY2). Старые прямые Fornex Reality — не сюда.
+ACTIVE_LINKS_FILE = Path("/root/hop-vpn-links.txt")
 SUB_DOMAIN = "287289.fornex.cloud"
 LE_CERT = Path(f"/etc/letsencrypt/live/{SUB_DOMAIN}/fullchain.pem")
 LE_KEY = Path(f"/etc/letsencrypt/live/{SUB_DOMAIN}/privkey.pem")
 DEFAULT_SUB_PORT = 2097
 DEFAULT_SUB_TLS_PORT = 2098
 MAIN_PORT = 443
-# Все VLESS-порты в одной подписке — клиент сам выберет рабочий
+# Legacy: прямые порты Fornex (из РФ часто мертвы) — только /links legacy
 SUBSCRIPTION_PORTS = (443, 2053, 2096, 8448, 4433)
 CLIENT_APP = "V2RayTun"
 
@@ -334,8 +336,42 @@ def html_escape(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _active_hop_links() -> list[str]:
+    """Рабочие RU-entry ссылки из /root/hop-vpn-links.txt."""
+    if not ACTIVE_LINKS_FILE.is_file():
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for line in ACTIVE_LINKS_FILE.read_text(errors="ignore").splitlines():
+        link = line.strip()
+        if not link or link.startswith("#"):
+            continue
+        if link.startswith(("vless://", "hysteria2://")) and link not in seen:
+            out.append(link)
+            seen.add(link)
+    return out
+
+
+def rotate_sub_token() -> str:
+    """Новый токен подписки (старый URL перестаёт работать)."""
+    db = load_db()
+    meta = ensure_meta(db)
+    meta["sub_token"] = secrets.token_urlsafe(24)
+    save_db(db)
+    return meta["sub_token"]
+
+
 def build_subscription_lines(uuids: list[str] | None = None) -> list[str]:
-    """Все ключи :443 + запасные порты + Hysteria2 в одной подписке."""
+    """Подписка = только рабочие hop-ссылки (RU-entry VLESS + HY2).
+
+    Старые прямые Fornex Reality/порты в подписку больше не попадают —
+    они из РФ часто не работают. Legacy: /links legacy.
+    """
+    hop = _active_hop_links()
+    if hop:
+        return hop
+
+    # Fallback, если hop-файл ещё не залили: прежнее поведение
     sync_registry_from_xray()
     disabled = _load_disabled_store()
     want = set(uuids) if uuids else None
@@ -370,23 +406,6 @@ def build_subscription_lines(uuids: list[str] | None = None) -> list[str]:
     hy2 = get_hysteria2_link()
     if hy2:
         add(hy2)
-
-    if not out:
-        try:
-            ib = main_443_inbound()
-            if ib:
-                for c in ib["clients"]:
-                    uid = c["id"]
-                    if uid in disabled:
-                        continue
-                    if want is not None and uid not in want:
-                        continue
-                    name = CLIENT_NAMES.get(uid) or c.get("name", "client")
-                    add(build_vless_link(uid, ib["port"], ib["sni"], ib["pub"], ib["sid"], name))
-        except Exception:
-            for e in collect_link_entries():
-                if e.get("port") in SUBSCRIPTION_PORTS:
-                    add(e.get("link", ""))
 
     return out
 
@@ -441,22 +460,23 @@ def subscription_stats() -> tuple[str, int]:
 
 
 def format_subscription_help(n: int) -> str:
-    ports = ", ".join(str(p) for p in SUBSCRIPTION_PORTS)
     has_le = LE_CERT.is_file()
     url_note = (
-        "URL подписки с валидным сертификатом — во 2-м сообщении."
+        "URL подписки — во 2-м сообщении (обновляй в клиенте, ключи подтянутся сами)."
         if has_le
-        else "URL https:// в Happ <b>не работает</b> (сертификат) — используйте файл ниже."
+        else "URL https:// в Happ может ругаться на сертификат — тогда файл ниже."
     )
     return (
-        f"📬 <b>Подписка VPN</b> ({n} профилей)\n\n"
-        f"VLESS: {ports} + Hysteria2 :8444\n\n"
+        f"📬 <b>Подписка VPN</b> ({n} профиля)\n\n"
+        "Рабочие: <b>RU-entry VLESS</b> + <b>Hysteria2</b>.\n\n"
         f"{url_note}\n\n"
-        "<b>Happ:</b> откройте файл <code>vpn-profiles.txt</code>\n"
-        "→ Поделиться → Открыть в Happ\n\n"
-        "<b>V2RayTun:</b> URL из следующего сообщения\n"
-        "или файл / импорт из буфера\n\n"
-        "Одна ссылка: /links iphone"
+        "<b>Если нет Happ (iPad / телефон жены):</b>\n"
+        "App Store → <b>Streisand</b> или <b>V2Box</b> или <b>Hiddify</b>\n"
+        "→ «Добавить из буфера» / Subscription → вставить URL.\n"
+        "На LTE МТС чаще стабильнее профиль <b>HY2</b>, не Reality.\n\n"
+        "Happ: файл <code>vpn-profiles.txt</code> → Поделиться → Открыть в Happ.\n\n"
+        "AmneziaWG: /awg wife · /awg iphone (приложение AmneziaVPN)\n"
+        "Одна ссылка: /links · QR: /qr"
     )
 
 
