@@ -120,3 +120,18 @@ UFW на entry: `22/tcp`, `443/tcp`, `8444/udp`, `51820/udp`, `51830/udp`.
 - Секреты WG и Reality keys только на серверах (`/etc/wireguard/`, xray config) — не в git.
 - На entry у `wg-hop` обязательно `Table = off` + ручной `PostUp` маршрут `10.99.0.0/24`, иначе `AllowedIPs=0.0.0.0/0` утащит default route и убьёт SSH.
 - После смены ключей WG — обновить peer public key на обеих сторонах и `systemctl restart wg-quick@wg-hop`.
+
+## Аварийный мост (2026-11-13)
+
+Прямой WireGuard Fornex↔RuVDS (`195.133.146.140`) оборван: ответы RuVDS→Fornex не доходят (TCP/UDP).
+
+Временный путь выхода:
+`phone → RuVDS active → SSH local forward → RuVDS-old:11081 ← SSH -R ← Fornex microsocks → интернет`
+
+Сервисы:
+- Fornex: `hop-bridge-ssh`, `hop-socks-local` (127.0.0.1:11082)
+- RuVDS-old: reverse listen `:11081`
+- RuVDS active: `hop-socks-forward` (127.0.0.1:11081), Xray/HY2 socks→localhost, AWG через `hop-tun2socks`
+
+Проверка: `curl --socks5-hostname 127.0.0.1:11081 https://ifconfig.me` → `103.75.126.216`
+
