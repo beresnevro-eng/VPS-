@@ -14,7 +14,7 @@
              (RU IP RuVDS)              (103.75.126.216)
 ```
 
-- **VLESS Reality** — Wi‑Fi / регионы, где TCP Reality проходит (напр. МТС Челябинск).
+- **VLESS Reality + XHTTP** — основной профиль на `:443`, отпечаток uTLS `randomized`, путь `/api/v1/events`, режим `packet-up`. Старый TCP Reality с Vision остаётся на `:2053` (`RuVDS-tcp`). После смены обновить подписку: прежний профиль `type=tcp` на `:443` больше не совпадает с сервером.
 - **Hysteria2** — LTE МТС Москва и другие сети, где Reality рвётся после handshake.
 - **AmneziaWG** — LTE МТС Москва; foreign → Fornex (`table 100`), **RU → eth0** (`fwmark` + `ipset ru_direct`).
 

@@ -398,7 +398,7 @@ def build_vless_link(
     pub: str,
     sid: str,
     name: str,
-    fp: str = "firefox",
+    fp: str = "randomized",
 ) -> str:
     host = SERVER_IP
     q = (
