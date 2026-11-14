@@ -18,8 +18,8 @@ if ! ip route show table 100 | grep -q "^default dev hop-tun"; then
   systemctl restart hop-tun2socks || true
 fi
 pid=$(systemctl show -p MainPID --value hop-tun2socks 2>/dev/null || echo 0)
-if [[ "$pid" != "0" && -r "/proc/$pid/cmdline" ]] && ! grep -qzF -- "--interface=wg-ru" "/proc/$pid/cmdline"; then
-  log "tun2socks not bound to wg-ru; restart"
+if [[ "$pid" != "0" && -r "/proc/$pid/cmdline" ]] && ! grep -qzF -- "127.0.0.1:11085" "/proc/$pid/cmdline"; then
+  log "tun2socks not on exit-split; restart"
   systemctl restart hop-tun2socks || true
 fi
 for s in xray hysteria-server wg-quick@wg-ru awg-quick@awg0 hop-tun2socks; do
