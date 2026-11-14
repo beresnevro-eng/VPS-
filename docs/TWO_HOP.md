@@ -14,7 +14,7 @@
              (RU IP RuVDS)              (103.75.126.216)
 ```
 
-- **VLESS Reality + XHTTP** — основной профиль на `:443`, отпечаток uTLS `randomized`, путь `/api/v1/events`, режим `packet-up`. Старый TCP Reality с Vision остаётся на `:2053` (`RuVDS-tcp`). После смены обновить подписку: прежний профиль `type=tcp` на `:443` больше не совпадает с сервером.
+- **VLESS Reality + XHTTP** — выгрузка на `:443`, загрузка на `:2083` того же entry (разные сокеты, одна сессия). Отпечаток uTLS `randomized`, путь `/api/v1/events`, режим `packet-up`. Padding `100-1000`, интервал постов `20-80` мс, срок соединения `90-240` с. Заголовки gRPC/SSE выключены. Старый TCP Reality с Vision — `:2053` (`RuVDS-tcp`). IPv6 на entry выключен: глобального адреса нет, иначе фон уходит мимо туннеля. В Amnezia `AllowedIPs` включает `::/0`, чтобы телефон не выпускал IPv6 напрямую. После смены обновить подписку и заново импортировать `/awg`.
 - **Hysteria2** — LTE МТС Москва и другие сети, где Reality рвётся после handshake.
 - **AmneziaWG** — LTE МТС Москва; foreign → Fornex (`table 100`), **RU → eth0** (`fwmark` + `ipset ru_direct`).
 
