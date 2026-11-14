@@ -1,0 +1,135 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "dns": {
+    "servers": [
+      "77.88.8.8",
+      "77.88.8.1"
+    ],
+    "queryStrategy": "UseIPv4"
+  },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "port": 11085,
+      "protocol": "socks",
+      "settings": {
+        "udp": true
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "frag",
+      "protocol": "freedom",
+      "streamSettings": {
+        "sockopt": {
+          "domainStrategy": "UseIPv4",
+          "tcpNoDelay": true
+        },
+        "finalmask": {
+          "tcp": [
+            {
+              "type": "fragment",
+              "settings": {
+                "packets": "tlshello",
+                "length": "1-3",
+                "delay": "1-2"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "streamSettings": {
+        "sockopt": {
+          "domainStrategy": "UseIPv4"
+        }
+      }
+    },
+    {
+      "tag": "slow",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "10.77.0.1",
+            "port": 11083
+          }
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "domain": [
+          "geosite:telegram",
+          "domain:telegram.org",
+          "domain:t.me",
+          "domain:telegram.me",
+          "domain:telegra.ph",
+          "domain:telesco.pe"
+        ],
+        "outboundTag": "slow"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "149.154.160.0/20",
+          "91.108.0.0/16",
+          "91.105.192.0/23",
+          "95.161.64.0/20"
+        ],
+        "outboundTag": "slow"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "geosite:youtube",
+          "domain:youtube.com",
+          "domain:youtu.be",
+          "domain:ytimg.com",
+          "domain:googlevideo.com",
+          "domain:ggpht.com",
+          "domain:gstatic.com",
+          "domain:googleapis.com",
+          "domain:google.com",
+          "domain:gvt1.com",
+          "domain:instagram.com",
+          "domain:cdninstagram.com",
+          "domain:fbcdn.net",
+          "domain:facebook.com",
+          "domain:fb.com",
+          "domain:whatsapp.com",
+          "domain:whatsapp.net",
+          "domain:meta.com",
+          "domain:twitter.com",
+          "domain:x.com",
+          "domain:twimg.com",
+          "domain:t.co"
+        ],
+        "outboundTag": "frag"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "direct"
+      }
+    ]
+  }
+}
